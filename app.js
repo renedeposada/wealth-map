@@ -2274,9 +2274,8 @@ function withdrawalSourceSummary(sources) {
   if (sources.cash > 0) parts.push(`Cash ${money(sources.cash)}`);
   if (sources.brokerage > 0)
     parts.push(`Brokerage ${money(sources.brokerage)}`);
-  if (sources.preTax > 0) parts.push(`Pre-tax ${money(sources.preTax)}`);
+  if (sources.preTax > 0) parts.push(`401(k)/IRA ${money(sources.preTax)}`);
   if (sources.roth > 0) parts.push(`Roth ${money(sources.roth)}`);
-  if (sources.rmd > 0) parts.push(`Includes RMD ${money(sources.rmd)}`);
   return parts.join(" • ");
 }
 
@@ -2300,16 +2299,27 @@ function contributionDetailsMarkup(row) {
 
 function withdrawalDetailsMarkup(row) {
   if (!row.isRetired) return "—";
-  const rmdNote =
-    row.withdrawalOverride != null && row.mandatoryRmd > row.requestedWithdrawal
-      ? '<small class="withdrawal-note">Mandatory RMD exceeds request</small>'
+  const sources = row.withdrawalSources || {};
+  const sourceRows = [
+    ["Cash", sources.cash],
+    ["Brokerage", sources.brokerage],
+    ["401(k)/IRA", sources.preTax],
+    ["Roth", sources.roth],
+  ]
+    .filter(([, value]) => value > 0)
+    .map(
+      ([label, value]) =>
+        `<span><small>${label}</small><strong>${money(value)}</strong></span>`,
+    )
+    .join("");
+  const shortfall =
+    row.unmetWithdrawalNeed > 0
+      ? `<span class="withdrawal-shortfall"><small>⚠ Shortfall</small><strong>${money(row.unmetWithdrawalNeed)}</strong></span>`
       : "";
   return `<div class="withdrawal-details">
-    <label>Requested total${timelineInputCell(row.age, "withdrawal", row.withdrawalOverride, row.requestedWithdrawal ?? row.withdrawal, false, "currency")}</label>
-    <span><small>Mandatory RMD</small><strong data-col="mandatoryRmd">${money(row.mandatoryRmd)}</strong></span>
-    <span><small>Actual funded</small><strong data-col="withdrawalActual">${money(row.actualWithdrawal)}</strong></span>
-    <span><small>Unmet need</small><strong data-col="unmetWithdrawalNeed">${money(row.unmetWithdrawalNeed)}</strong></span>
-    ${rmdNote}
+    ${sourceRows}
+    <span class="withdrawal-total"><small>Total</small><strong>${money(row.actualWithdrawal)}</strong></span>
+    ${shortfall}
   </div>`;
 }
 
@@ -2377,15 +2387,8 @@ function updateTimelineComputedCells(rows) {
       });
     }
     const withdrawalCell = tr.querySelector('[data-col="withdrawal"]');
-    const withdrawalActual = tr.querySelector('[data-col="withdrawalActual"]');
-    if (withdrawalActual) {
-      withdrawalActual.textContent = money(row.actualWithdrawal);
-      tr.querySelector('[data-col="mandatoryRmd"]').textContent = money(
-        row.mandatoryRmd,
-      );
-      tr.querySelector('[data-col="unmetWithdrawalNeed"]').textContent = money(
-        row.unmetWithdrawalNeed,
-      );
+    if (row.isRetired) {
+      withdrawalCell.innerHTML = withdrawalDetailsMarkup(row);
     } else {
       withdrawalCell.textContent = "—";
     }
