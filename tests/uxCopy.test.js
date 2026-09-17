@@ -76,6 +76,37 @@ test("metric help buttons are wired through delegated, keyboard-triggerable clic
   assert.ok(appJs.includes('closest(".metric-help-button")'));
 });
 
+test("page navigation updates the browser hash so back and forward navigation works", () => {
+  assert.ok(appJs.includes("location.hash"));
+  assert.ok(appJs.includes("hashchange"));
+  assert.ok(appJs.includes("showPage(getPageFromHash") || appJs.includes("showPage(getPageFromHash()"));
+});
+
+test("withdrawal detail has a contextual explanatory tooltip for the retirement withdrawal sequence", () => {
+  assert.ok(indexHtml.includes('id="timeline-withdrawal-sequence-help-button"'));
+  assert.ok(
+    indexHtml.includes(
+      'aria-controls="timeline-withdrawal-sequence-help" aria-label="About Withdrawal Sequence"',
+    ),
+  );
+  assert.ok(
+    indexHtml.includes(
+      'id="timeline-withdrawal-sequence-help" role="tooltip" data-help-button-id="timeline-withdrawal-sequence-help-button" hidden',
+    ),
+  );
+  assert.ok(indexHtml.includes("Withdrawal Sequence"));
+  assert.ok(indexHtml.includes("Cash reserves"));
+  assert.ok(indexHtml.includes("Taxable brokerage accounts"));
+  assert.ok(indexHtml.includes("Traditional IRA and 401(k) accounts"));
+  assert.ok(indexHtml.includes("Roth IRA accounts"));
+  assert.ok(indexHtml.includes("Required Minimum Distributions (RMDs) are taken when applicable and are shown separately."));
+  assert.ok(
+    indexHtml.includes(
+      "During positive market years, the model may replenish cash reserves from brokerage assets based on your Cash Reserve target setting.",
+    ),
+  );
+});
+
 test("additional annual savings explains the brokerage and cash allocation", () => {
   assert.ok(indexHtml.includes("Additional Annual Savings"));
   assert.ok(!indexHtml.includes("Available Annual Savings"));

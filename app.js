@@ -2631,8 +2631,21 @@ function handleInput(event) {
   updateWorkingValue(field, event.target.value, event.target.dataset.type);
 }
 
+function getPageFromHash() {
+  const hash = window.location.hash.replace(/^#\/?/, "").trim();
+  if (pageTitles[hash]) return hash;
+  if (hash === "readiness" || hash === "profile" || hash === "assets" || hash === "cashflow" || hash === "timeline" || hash === "recommendations") {
+    return hash;
+  }
+  return "readiness";
+}
+
 function showPage(page) {
   currentPage = pageTitles[page] ? page : "readiness";
+  const targetHash = currentPage === "readiness" ? "#readiness" : `#${currentPage}`;
+  if (window.location.hash !== targetHash) {
+    window.history.pushState(null, "", targetHash);
+  }
   $$(".page-view").forEach((view) => {
     view.hidden = view.dataset.view !== currentPage;
   });
@@ -2643,6 +2656,10 @@ function showPage(page) {
   $("#breadcrumb").textContent = breadcrumb;
   $("#page-title").textContent = title;
   closeMenu();
+}
+
+function syncPageFromHash() {
+  showPage(getPageFromHash());
 }
 
 function closeMenu() {
@@ -2742,6 +2759,9 @@ function init() {
   $$(".nav-item").forEach((item) =>
     item.addEventListener("click", () => showPage(item.dataset.page)),
   );
+  window.addEventListener("hashchange", syncPageFromHash);
+  window.addEventListener("popstate", syncPageFromHash);
+  syncPageFromHash();
   $("#reset-button").addEventListener("click", resetSample);
   $("#advanced-tax-toggle").addEventListener(
     "click",

@@ -365,7 +365,7 @@
             <section class="panel timeline-table-panel" aria-label="Editable year-by-year timeline">
               <div class="panel-label">Year-by-year detail</div>
               <p class="panel-supporting-text">Working-year contribution totals can be expanded to review each account category. Employer match is included in account contributions but is not household cash flow.</p>
-              <p class="panel-supporting-text">Net cash flow shows income and spending activity only; portfolio withdrawals and mandatory RMDs are shown separately. Withdrawal values are simplified educational estimates.</p>
+              <p class="panel-supporting-text">Cash Surplus / Deficit reflects remaining cash after planned spending and savings activity; portfolio withdrawals and mandatory RMDs are shown separately. Withdrawal values are simplified educational estimates.</p>
               <p class="panel-supporting-text">Income overrides apply during working years; spending and withdrawal overrides apply during retirement.</p>
               <div class="timeline-table-wrapper">
                 <table class="timeline-table">
@@ -378,15 +378,34 @@
                       <th scope="col">Roth conversion</th>
                       <th scope="col">Expenses / spending</th>
                       <th scope="col">Extra withdrawal</th>
-                      <th scope="col">Contribution (expand)</th>
-                      <th scope="col">Withdrawal detail</th>
+                      <th scope="col">Savings (expand)</th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Withdrawal Detail <button class="info-button metric-help-button" id="timeline-withdrawal-sequence-help-button" type="button" data-help-target="timeline-withdrawal-sequence-help" aria-expanded="false" aria-controls="timeline-withdrawal-sequence-help" aria-label="About Withdrawal Sequence">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-withdrawal-sequence-help" role="tooltip" data-help-button-id="timeline-withdrawal-sequence-help-button" hidden>
+                          <strong>Withdrawal Sequence</strong>
+                          <p>WealthMap uses a simplified withdrawal sequence to fund retirement spending:</p>
+                          <ul>
+                            <li>Cash reserves</li>
+                            <li>Taxable brokerage accounts</li>
+                            <li>Traditional IRA and 401(k) accounts</li>
+                            <li>Roth IRA accounts</li>
+                          </ul>
+                          <p>Required Minimum Distributions (RMDs) are taken when applicable and are shown separately.</p>
+                          <p>During positive market years, the model may replenish cash reserves from brokerage assets based on your Cash Reserve target setting.</p>
+                          <p>This withdrawal sequence is a planning assumption and may not be optimal for every tax situation.</p>
+                        </div>
+                      </th>
                       <th scope="col">RMD</th>
                       <th scope="col">Taxes</th>
-                      <th scope="col" class="has-help"><span class="metric-label-row">Net cash flow <button class="info-button metric-help-button" id="timeline-cash-flow-help-button" type="button" data-help-target="timeline-cash-flow-help" aria-expanded="false" aria-controls="timeline-cash-flow-help" aria-label="About Net cash flow">i</button></span>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Cash Surplus / Deficit <button class="info-button metric-help-button" id="timeline-cash-flow-help-button" type="button" data-help-target="timeline-cash-flow-help" aria-expanded="false" aria-controls="timeline-cash-flow-help" aria-label="About Cash Surplus / Deficit">i</button></span>
                         <div class="metric-help timeline-table-help" id="timeline-cash-flow-help" role="tooltip" data-help-button-id="timeline-cash-flow-help-button" hidden>
-                          <strong>Net cash flow</strong>
-                          <p>Working years: after-tax income minus employee post-tax contributions, expenses, and extra cash needs.</p>
-                          <p>Retirement years: net Social Security minus spending, extra withdrawal needs, IRMAA, and Roth conversion tax. Portfolio withdrawals and mandatory RMDs are shown separately.</p>
+                          <strong>Cash Surplus / Deficit</strong>
+                          <p><strong>Working Years</strong></p>
+                          <p>Cash remaining after estimated taxes, expenses, retirement contributions, brokerage investments, cash savings, and any additional cash needs.</p>
+                          <p>Positive values indicate money left over after your planned spending and savings activities.</p>
+                          <p>Negative values indicate additional funds were required beyond your available cash flow.</p>
+                          <p><strong>Retirement Years</strong></p>
+                          <p>Represents the difference between retirement income sources and retirement spending obligations.</p>
+                          <p>Portfolio withdrawals and required minimum distributions (RMDs) are shown separately.</p>
                         </div>
                       </th>
                       <th scope="col">Ending assets</th>
