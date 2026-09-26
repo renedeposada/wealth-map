@@ -357,11 +357,6 @@
               <div class="panel-label">Retirement milestones</div>
               <div id="timeline-milestones" class="timeline-milestones"></div>
             </section>
-            <section class="panel timeline-composition-panel" aria-label="Portfolio composition at retirement milestones">
-              <div class="panel-label">Portfolio composition at planning milestones</div>
-              <p class="panel-supporting-text">Compare where the modeled financial assets are held when key retirement decisions occur. Real estate is excluded because it is not treated as spendable portfolio assets.</p>
-              <div id="timeline-composition"></div>
-            </section>
             <section class="panel timeline-table-panel" aria-label="Editable year-by-year timeline">
               <div class="panel-label">Year-by-year detail</div>
               <p class="panel-supporting-text">Working-year contribution totals can be expanded to review each account category. Employer match is included in account contributions but is not household cash flow.</p>
@@ -415,7 +410,12 @@
                           <p>Portfolio withdrawals and required minimum distributions (RMDs) are shown separately.</p>
                         </div>
                       </th>
-                      <th scope="col">Ending assets</th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Portfolio Value <button class="info-button metric-help-button" id="timeline-portfolio-value-help-button" type="button" data-help-target="timeline-portfolio-value-help" aria-expanded="false" aria-controls="timeline-portfolio-value-help" aria-label="About Portfolio Value">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-portfolio-value-help" role="tooltip" data-help-button-id="timeline-portfolio-value-help-button" hidden>
+                          <strong>Portfolio Value</strong>
+                          <p>Portfolio Value shows the total modeled financial assets at the end of the year. Expand any row to see balances by account type, including Brokerage, Tax-Deferred Retirement Accounts, Roth Accounts, and Cash. Real Estate is not included.</p>
+                        </div>
+                      </th>
                       <th scope="col"></th>
                     </tr>
                   </thead>

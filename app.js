@@ -890,8 +890,17 @@ function buildTimelineRows(profile) {
 
   let brokerage = profile.assets.brokerage;
   let preTax = profile.assets.fourOhOneK + profile.assets.traditionalIra;
+  let fourOhOneK = profile.assets.fourOhOneK;
+  let traditionalIra = profile.assets.traditionalIra;
   let roth = profile.assets.rothIra;
   let cash = profile.assets.cash;
+
+  const syncPreTaxBuckets = (nextTotal) => {
+    const currentTotal = fourOhOneK + traditionalIra;
+    const fourOhOneKShare = currentTotal > 0 ? fourOhOneK / currentTotal : 0.5;
+    fourOhOneK = Math.max(0, nextTotal * fourOhOneKShare);
+    traditionalIra = Math.max(0, nextTotal - fourOhOneK);
+  };
 
   for (let age = startAge; age <= endAge; age += 1) {
     const override = timelineOverrideFor(profile, age);
@@ -979,14 +988,16 @@ function buildTimelineRows(profile) {
       brokerage = growth.balance;
       niit = growth.niit;
       preTax *= 1 + realReturn;
+      syncPreTaxBuckets(preTax);
       roth *= 1 + realReturn;
 
       income = salaryForYear + profile.otherAnnualIncome;      cash += contributions.cash;
       brokerage += contributions.brokerage;
-      preTax +=
+      fourOhOneK +=
         contributions.employeeFourOhOneK +
-        contributions.employerFourOhOneKMatch +
-        contributions.traditionalIra;
+        contributions.employerFourOhOneKMatch;
+      traditionalIra += contributions.traditionalIra;
+      preTax = fourOhOneK + traditionalIra;
       roth += contributions.rothIra;
       contribution =
         contributions.employeeSavings + contributions.employerFourOhOneKMatch;
@@ -1007,6 +1018,7 @@ function buildTimelineRows(profile) {
             baseTax,
         );
         preTax -= conversion;
+        syncPreTaxBuckets(preTax);
         roth += conversion;
         brokerage = Math.max(0, brokerage - taxOnConversion);
       }
@@ -1089,6 +1101,7 @@ function buildTimelineRows(profile) {
       brokerage = growth.balance;
       niit = growth.niit;
       preTax *= 1 + realReturn;
+      syncPreTaxBuckets(preTax);
       roth *= 1 + realReturn;
 
       // RMD is a forced distribution; only the balance remaining after it is available to convert.
@@ -1109,10 +1122,12 @@ function buildTimelineRows(profile) {
             baseTax,
         );
         preTax = preTaxAfterRmd - conversion;
+        syncPreTaxBuckets(preTax);
         roth += conversion;
         brokerage = Math.max(0, brokerage - conversionTax);
       } else {
         preTax = preTaxAfterRmd;
+        syncPreTaxBuckets(preTax);
       }
       rowConversion = conversion;
       rowConversionTax = conversionTax;
@@ -1190,9 +1205,17 @@ function buildTimelineRows(profile) {
 
     brokerage = Math.max(0, brokerage);
     preTax = Math.max(0, preTax);
+    syncPreTaxBuckets(preTax);
     roth = Math.max(0, roth);
     cash = Math.max(0, cash);
-    const endBalances = { brokerage, preTax, roth, cash };
+    const endBalances = {
+      brokerage,
+      preTax,
+      fourOhOneK,
+      traditionalIra,
+      roth,
+      cash,
+    };
     const endTotal = brokerage + preTax + roth + cash;
 
     rows.push({
@@ -2219,75 +2242,6 @@ function renderTimelineMilestones(rows, profile, ssPlan) {
     .join("");
 }
 
-const COMPOSITION_CATEGORIES = [
-  { key: "cash", label: "Cash reserves", color: "var(--lime)" },
-  { key: "brokerage", label: "Taxable brokerage", color: "var(--blue)" },
-  {
-    key: "preTax",
-    label: "Tax-deferred (401(k) & Traditional IRA)",
-    color: "var(--coral)",
-  },
-  { key: "roth", label: "Roth (tax-free)", color: "var(--teal)" },
-];
-
-function compositionShare(value, total) {
-  return total > 0 ? percent(value / total) : "0.0%";
-}
-
-function compositionPlanningNote(row) {
-  const total = row.endTotal;
-  if (total <= 0) return "No modeled financial assets remain at this age.";
-  const preTaxShare = (row.endBalances.preTax || 0) / total;
-  const cashShare = (row.endBalances.cash || 0) / total;
-  if (row.rmd > 0)
-    return `RMD exposure is active: ${money(row.rmd)} modeled this year from tax-deferred assets.`;
-  if (preTaxShare > 0.5)
-    return "Tax-deferred assets are the majority; future withdrawals may increase taxable income.";
-  if (cashShare < 0.05)
-    return "Cash is a small share of the portfolio; review liquidity for near-term spending.";
-  return "The mix shows taxable, tax-deferred, Roth, and liquid sources for future withdrawals.";
-}
-
-function compositionMilestoneRows(rows) {
-  const selected = [];
-  const add = (row, label) => {
-    if (row && !selected.some((item) => item.row.age === row.age))
-      selected.push({ row, label });
-  };
-  add(rows[0], "Current modeled year");
-  add(
-    rows.find((row) => row.isRetired),
-    "Retirement begins",
-  );
-  add(
-    rows.find((row) => row.rmd > 0),
-    "First RMD year",
-  );
-  add(rows[rows.length - 1], "Life expectancy");
-  return selected;
-}
-
-function renderPortfolioComposition(rows) {
-  const container = $("#timeline-composition");
-  if (!container) return;
-  if (!rows.length) {
-    container.innerHTML =
-      '<p class="notice-panel">Enter a valid current age and life expectancy to see portfolio composition.</p>';
-    return;
-  }
-
-  container.innerHTML = compositionMilestoneRows(rows)
-    .map(({ row, label }) => {
-      const total = row.endTotal;
-      const buckets = COMPOSITION_CATEGORIES.map((category) => {
-        const value = Math.max(0, row.endBalances[category.key] || 0);
-        return `<div class="composition-bucket"><span><i class="legend-swatch" style="background:${category.color}"></i>${category.label}</span><strong>${money(value)}</strong><small>${compositionShare(value, total)}</small></div>`;
-      }).join("");
-      return `<article class="composition-snapshot"><span class="composition-age">Age ${row.age}</span><h3>${label}</h3><p class="composition-total">${money(total)} financial assets</p><div class="composition-buckets">${buckets}</div><p class="composition-note">${compositionPlanningNote(row)}</p></article>`;
-    })
-    .join("");
-}
-
 function timelineInputCell(age, field, value, defaultValue, disabled, type) {
   const displayDefault =
     type === "percent"
@@ -2300,11 +2254,11 @@ function timelineInputCell(age, field, value, defaultValue, disabled, type) {
 function withdrawalSourceSummary(sources) {
   if (!sources) return "";
   const parts = [];
-  if (sources.cash > 0) parts.push(`Cash ${money(sources.cash)}`);
+  if (sources.preTax > 0) parts.push(`401(k) / Traditional IRA ${money(sources.preTax)}`);
+  if (sources.roth > 0) parts.push(`Roth ${money(sources.roth)}`);
   if (sources.brokerage > 0)
     parts.push(`Brokerage ${money(sources.brokerage)}`);
-  if (sources.preTax > 0) parts.push(`401(k)/IRA ${money(sources.preTax)}`);
-  if (sources.roth > 0) parts.push(`Roth ${money(sources.roth)}`);
+  if (sources.cash > 0) parts.push(`Cash ${money(sources.cash)}`);
   return parts.join(" • ");
 }
 
@@ -2316,12 +2270,26 @@ function contributionDetailsMarkup(row) {
   return `<details class="contribution-details">
     <summary aria-label="View contribution breakdown for age ${row.age}">${money(row.contribution)}</summary>
     <div class="contribution-breakdown">
-      <span><small>Employee 401(k)</small><strong data-contribution-value="employeeFourOhOneK">${money(details.employeeFourOhOneK)}</strong></span>
-      <span><small>Employer 401(k) match</small><strong data-contribution-value="employerFourOhOneKMatch">${money(details.employerFourOhOneKMatch)}</strong></span>
+      <span><small>401(k)</small><strong data-contribution-value="employeeFourOhOneK">${money(details.employeeFourOhOneK)}</strong></span>
+      <span><small>Employer Match</small><strong data-contribution-value="employerFourOhOneKMatch">${money(details.employerFourOhOneKMatch)}</strong></span>
       <span><small>Traditional IRA</small><strong data-contribution-value="traditionalIra">${money(details.traditionalIra)}</strong></span>
       <span><small>Roth IRA</small><strong data-contribution-value="rothIra">${money(details.rothIra)}</strong></span>
-      <span><small>Taxable brokerage</small><strong data-contribution-value="brokerage">${money(details.brokerage)}</strong></span>
-      <span><small>Cash reserve</small><strong data-contribution-value="cash">${money(details.cash)}</strong></span>
+      <span><small>Brokerage</small><strong data-contribution-value="brokerage">${money(details.brokerage)}</strong></span>
+      <span><small>Cash</small><strong data-contribution-value="cash">${money(details.cash)}</strong></span>
+    </div>
+  </details>`;
+}
+
+function portfolioValueDetailsMarkup(row) {
+  const balances = row.endBalances || {};
+  return `<details class="portfolio-value-details">
+    <summary aria-label="View portfolio value breakdown for age ${row.age}">${money(row.endTotal)}</summary>
+    <div class="portfolio-breakdown">
+      <span><small>401(k)</small><strong data-portfolio-value="fourOhOneK">${money(balances.fourOhOneK)}</strong></span>
+      <span><small>Traditional IRA</small><strong data-portfolio-value="traditionalIra">${money(balances.traditionalIra)}</strong></span>
+      <span><small>Roth IRA</small><strong data-portfolio-value="roth">${money(balances.roth)}</strong></span>
+      <span><small>Brokerage</small><strong data-portfolio-value="brokerage">${money(balances.brokerage)}</strong></span>
+      <span><small>Cash</small><strong data-portfolio-value="cash">${money(balances.cash)}</strong></span>
     </div>
   </details>`;
 }
@@ -2330,10 +2298,10 @@ function withdrawalDetailsMarkup(row) {
   if (!row.isRetired) return "—";
   const sources = row.withdrawalSources || {};
   const sourceRows = [
-    ["Cash", sources.cash],
+    ["401(k) / Traditional IRA", sources.preTax],
+    ["Roth IRA", sources.roth],
     ["Brokerage", sources.brokerage],
-    ["401(k)/IRA", sources.preTax],
-    ["Roth", sources.roth],
+    ["Cash", sources.cash],
   ]
     .filter(([, value]) => value > 0)
     .map(
@@ -2370,7 +2338,7 @@ function timelineRowMarkup(row) {
     <td data-col="rmd">${row.rmd > 0 ? money(row.rmd) : "—"}</td>
     <td data-col="taxes">${taxesTotal > 0 ? money(taxesTotal) : "—"}</td>
     <td data-col="netCashFlow">${money(row.netCashFlow)}</td>
-    <td data-col="endTotal" class="timeline-total">${money(row.endTotal)}</td>
+    <td data-col="endTotal" class="timeline-total">${portfolioValueDetailsMarkup(row)}</td>
     <td><button type="button" class="button button-quiet timeline-clear" data-timeline-clear="${row.age}" ${row.hasOverride ? "" : "disabled"}>Clear</button></td>
   </tr>`;
 }
@@ -2427,7 +2395,12 @@ function updateTimelineComputedCells(rows) {
     tr.querySelector('[data-col="netCashFlow"]').textContent = money(
       row.netCashFlow,
     );
-    tr.querySelector('[data-col="endTotal"]').textContent = money(row.endTotal);
+    const portfolioCell = tr.querySelector('[data-col="endTotal"]');
+    const portfolioSummary = portfolioCell?.querySelector("summary");
+    if (portfolioSummary) portfolioSummary.textContent = money(row.endTotal);
+    portfolioCell?.querySelectorAll("[data-portfolio-value]").forEach((value) => {
+      value.textContent = money(row.endBalances?.[value.dataset.portfolioValue]);
+    });
     const clearButton = tr.querySelector(".timeline-clear");
     if (clearButton) clearButton.disabled = !row.hasOverride;
   });
@@ -2473,7 +2446,6 @@ function renderTimeline() {
   renderStrategySummary(ssPlan, effectiveProfile, summary);
   renderTimelineTable(rows);
   renderTimelineMilestones(rows, effectiveProfile, ssPlan);
-  renderPortfolioComposition(rows);
   renderTimelineSummary(rows);
   return rows;
 }
@@ -2495,7 +2467,6 @@ function handleTimelineTableInput(event) {
   renderStrategySummary(ssPlan, effectiveProfile, summary);
   updateTimelineComputedCells(rows);
   renderTimelineMilestones(rows, effectiveProfile, ssPlan);
-  renderPortfolioComposition(rows);
   renderTimelineSummary(rows);
 }
 
