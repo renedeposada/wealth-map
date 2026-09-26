@@ -246,6 +246,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .ss-claiming-table tr.ss-recommended-row { outline: 2px solid var(--blue); outline-offset: -2px; }
 
 .timeline-strategy-panel { padding: 22px; margin-bottom: 14px; }
+.ss-claiming-panel { margin-bottom: 14px; }
 .strategy-summary { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 14px 0; }
 .strategy-summary-item { padding: 14px 16px; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: var(--radius); background: var(--surface); }
 .strategy-summary-item span { display: block; color: var(--ink-soft); font: 10px Arial, sans-serif; text-transform: uppercase; letter-spacing: .06em; }
