@@ -201,7 +201,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .milestone strong { font-size: 15px; }
 .milestone span { color: var(--ink-soft); font: 10px Arial, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
 .milestone p { margin: 0; color: var(--ink); font: 12px/1.45 Arial, sans-serif; }
-.milestone-value { font-weight: 600; color: var(--blue); }
+.milestone .metric-help p { margin: 8px 0 0; }
+.milestone-age-row { margin-bottom: 2px; }
+.milestone-values { display: grid; gap: 2px; }
+.milestone-value-row { color: var(--ink); }
+.milestone-value-row strong { font-weight: 700; color: var(--blue); }
 .panel-supporting-text { max-width: 720px; margin: 8px 0 0; color: var(--ink-soft); font: 12px/1.6 Arial, sans-serif; }
 .timeline-table-panel { padding: 22px; margin-bottom: 14px; }
 .timeline-table-wrapper { max-height: 560px; overflow: auto; margin-top: 14px; border: 1px solid var(--line); }

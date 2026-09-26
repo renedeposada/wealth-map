@@ -2104,25 +2104,27 @@ function renderTimelineSummary(rows) {
   $("#timeline-overridden-count").textContent = String(summary.overriddenYears);
 }
 
-// Short, concept-level explanations shown via an info button on milestone cards
-// that need more than a one-line metric to be understood.
-const MILESTONE_HELP_CONTENT = {
-  rmd: {
-    title: "RMD",
-    text: "Required Minimum Distribution: a mandatory withdrawal from eligible tax-deferred retirement accounts once RMD age is reached.",
-  },
-  irmaa: {
-    title: "IRMAA",
-    text: "An income-related Medicare surcharge that can apply once income exceeds an editable threshold.",
-  },
-  rothConversion: {
-    title: "Roth Conversion Milestones",
-    text: "Marks the modeled window WealthMap uses to convert tax-deferred savings into a Roth account.",
-  },
-  withdrawalShift: {
-    title: "Withdrawal Source Shift",
-    text: "Marks when modeled retirement spending begins relying primarily on tax-deferred or Roth withdrawals instead of cash and brokerage.",
-  },
+// Short, concept-level explanations of why each milestone type matters,
+// combined per age into a single tooltip when multiple events share an age.
+const MILESTONE_DESCRIPTIONS = {
+  retirement:
+    "Retirement begins based on the retirement age configured in Plan Setup.",
+  socialSecurity:
+    "Social Security benefits begin at the claim age used by the plan.",
+  rothConversionStart:
+    "The model begins moving funds from tax-deferred retirement accounts into Roth accounts.",
+  rothConversionEnd:
+    "The final modeled year for Roth conversions under the current strategy.",
+  firstRmd:
+    "Required Minimum Distributions begin from eligible tax-deferred retirement accounts.",
+  firstIrmaa:
+    "The first projected year in which Medicare IRMAA surcharges apply.",
+  withdrawalShift:
+    "Modeled retirement spending begins relying primarily on tax-deferred or Roth withdrawals instead of cash and brokerage.",
+  peakPortfolio:
+    "The highest projected portfolio value reached before the end of the plan.",
+  depletion:
+    "The portfolio is projected to reach $0 at this age under current assumptions.",
 };
 
 function buildTimelineMilestones(rows, profile, ssPlan) {
@@ -2130,15 +2132,16 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
 
   const summary = timelineSummary(rows, profile);
   const byAge = new Map();
-  const addMilestone = (age, label, metric, helpKey) => {
+  const addMilestone = (age, label, valueLabel, value, valueFormat, descriptionKey) => {
     if (!Number.isFinite(age)) return;
     const current =
-      byAge.get(age) || { age, labels: [], metrics: [], helpKeys: [] };
+      byAge.get(age) || { age, labels: [], values: [], descriptions: [] };
     if (!current.labels.includes(label)) current.labels.push(label);
-    if (metric && !current.metrics.includes(metric))
-      current.metrics.push(metric);
-    if (helpKey && !current.helpKeys.includes(helpKey))
-      current.helpKeys.push(helpKey);
+    if (valueLabel != null)
+      current.values.push({ valueLabel, value, valueFormat });
+    const description = MILESTONE_DESCRIPTIONS[descriptionKey];
+    if (description && !current.descriptions.includes(description))
+      current.descriptions.push(description);
     byAge.set(age, current);
   };
 
@@ -2147,7 +2150,10 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       retirementRow.age,
       "Retirement begins",
-      `Portfolio: ${money(retirementRow.endTotal)}`,
+      "Portfolio",
+      retirementRow.endTotal,
+      "currency",
+      "retirement",
     );
   }
 
@@ -2159,7 +2165,10 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
       addMilestone(
         socialSecurityRow.age,
         "Social Security begins",
-        `${money(ssPlan.annualBenefit)} / year`,
+        "Annual Benefit",
+        ssPlan.annualBenefit,
+        "currency",
+        "socialSecurity",
       );
     }
   }
@@ -2171,22 +2180,33 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       firstRow.age,
       "Roth conversions begin",
-      money(firstRow.rothConversion),
-      "rothConversion",
+      "Conversion",
+      firstRow.rothConversion,
+      "currency",
+      "rothConversionStart",
     );
     if (lastRow.age !== firstRow.age) {
       addMilestone(
         lastRow.age,
         "Roth conversions end",
-        money(lastRow.rothConversion),
-        "rothConversion",
+        "Final Conversion",
+        lastRow.rothConversion,
+        "currency",
+        "rothConversionEnd",
       );
     }
   }
 
   const firstRmdRow = rows.find((row) => row.isRetired && row.rmd > 0);
   if (firstRmdRow) {
-    addMilestone(firstRmdRow.age, "First RMD", money(firstRmdRow.rmd), "rmd");
+    addMilestone(
+      firstRmdRow.age,
+      "First RMD",
+      "Distribution",
+      firstRmdRow.rmd,
+      "currency",
+      "firstRmd",
+    );
   }
 
   const firstIrmaaRow = rows.find((row) => row.isRetired && row.irmaa > 0);
@@ -2194,8 +2214,10 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       firstIrmaaRow.age,
       "First IRMAA year",
-      `${money(firstIrmaaRow.irmaa)} surcharge`,
-      "irmaa",
+      "Surcharge",
+      firstIrmaaRow.irmaa,
+      "currency",
+      "firstIrmaa",
     );
   }
 
@@ -2208,7 +2230,9 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       transitionRow.age,
       "Withdrawal source shifts",
-      `Portfolio: ${money(transitionRow.endTotal)}`,
+      "Portfolio",
+      transitionRow.endTotal,
+      "currency",
       "withdrawalShift",
     );
   }
@@ -2219,18 +2243,28 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
   addMilestone(
     peakRow.age,
     "Peak portfolio value",
-    `Portfolio: ${money(peakRow.endTotal)}`,
+    "Portfolio",
+    peakRow.endTotal,
+    "currency",
+    "peakPortfolio",
   );
 
   if (summary.depletionAge != null) {
-    addMilestone(summary.depletionAge, "Portfolio depletion", "Portfolio depleted");
+    addMilestone(
+      summary.depletionAge,
+      "Portfolio depletion",
+      "Portfolio",
+      0,
+      "currency",
+      "depletion",
+    );
   }
 
   return [...byAge.values()]
     .map((milestone) => ({
       ...milestone,
       label: milestone.labels.join(" • "),
-      metric: milestone.metrics.join(" • "),
+      tooltip: milestone.descriptions.join(" "),
     }))
     .sort((a, b) => a.age - b.age)
     .slice(0, 8);
@@ -2248,25 +2282,31 @@ function renderTimelineMilestones(rows, profile, ssPlan) {
 
   container.innerHTML = milestones
     .map((milestone) => {
-      const helpButtons = milestone.helpKeys
-        .map((key) => {
-          const help = MILESTONE_HELP_CONTENT[key];
-          if (!help) return "";
-          const buttonId = `milestone-${milestone.age}-${key}-help-button`;
-          const tooltipId = `milestone-${milestone.age}-${key}-help`;
-          return `<button class="info-button metric-help-button" id="${buttonId}" type="button" data-help-target="${tooltipId}" aria-expanded="false" aria-controls="${tooltipId}" aria-label="About ${help.title}">i</button><div class="metric-help" id="${tooltipId}" role="tooltip" data-help-button-id="${buttonId}" hidden><strong>${help.title}</strong><p>${help.text}</p></div>`;
-        })
+      const buttonId = `milestone-${milestone.age}-help-button`;
+      const tooltipId = `milestone-${milestone.age}-help`;
+      const valuesMarkup = milestone.values
+        .map(
+          (entry) =>
+            `<p class="milestone-value-row"><span>${entry.valueLabel}:</span> <strong>${entry.valueFormat === "text" ? entry.value : money(entry.value)}</strong></p>`,
+        )
         .join("");
       return `
         <div class="milestone">
-          <span>Age ${milestone.age}</span>
-          <strong class="metric-label-row has-help">${milestone.label}${helpButtons}</strong>
-          <p>${milestone.metric}</p>
+          <div class="metric-label-row has-help milestone-age-row">
+            <span class="milestone-age">Age ${milestone.age}</span>
+            <button class="info-button metric-help-button" id="${buttonId}" type="button" data-help-target="${tooltipId}" aria-expanded="false" aria-controls="${tooltipId}" aria-label="About the age ${milestone.age} milestones">i</button>
+            <div class="metric-help" id="${tooltipId}" role="tooltip" data-help-button-id="${buttonId}" hidden>
+              <p>${milestone.tooltip}</p>
+            </div>
+          </div>
+          <strong>${milestone.label}</strong>
+          <div class="milestone-values">${valuesMarkup}</div>
         </div>
       `;
     })
     .join("");
 }
+
 
 function timelineInputCell(age, field, value, defaultValue, disabled, type) {
   const displayDefault =
