@@ -933,6 +933,8 @@ function buildTimelineRows(profile) {
     let withdrawal = 0;
     let rmd = 0;
     let niit = 0;
+    let rowFederalTax = 0;
+    let rowStateTax = 0;
     let rowSocialSecurityTax = 0;
     let rowIrmaa = 0;
     let rowConversion = 0;
@@ -956,6 +958,8 @@ function buildTimelineRows(profile) {
         profile.otherAnnualIncome,
       );
       contributionDetails = { ...contributions };
+      rowFederalTax = contributions.currentFederalTax;
+      rowStateTax = contributions.currentStateTax;
       const growth = applyBrokerageGrowth(
         profile,
         brokerage,
@@ -967,8 +971,7 @@ function buildTimelineRows(profile) {
       preTax *= 1 + realReturn;
       roth *= 1 + realReturn;
 
-      income = salaryForYear + profile.otherAnnualIncome;
-      cash += contributions.cash;
+      income = salaryForYear + profile.otherAnnualIncome;      cash += contributions.cash;
       brokerage += contributions.brokerage;
       preTax +=
         contributions.employeeFourOhOneK +
@@ -1060,6 +1063,12 @@ function buildTimelineRows(profile) {
         taxableSocialSecurity + rmd > profile.irmaaIncomeThreshold
           ? profile.irmaaAnnualSurcharge
           : 0;
+
+      // Income tax attributable to the RMD, stacked marginally on top of taxable Social Security.
+      rowFederalTax =
+        progressiveFederalTax(profile, taxableSocialSecurity + rmd) -
+        progressiveFederalTax(profile, taxableSocialSecurity);
+      rowStateTax = rmd * profile.stateIncomeTaxRate;
 
       const growth = applyBrokerageGrowth(
         profile,
@@ -1201,11 +1210,21 @@ function buildTimelineRows(profile) {
       unmetWithdrawalNeed: rowUnmetWithdrawalNeed,
       rmd,
       niit,
+      federalTax: rowFederalTax,
+      stateTax: rowStateTax,
       socialSecurityTax: rowSocialSecurityTax,
       socialSecurityGrossBenefit: rowSocialSecurityGross,
       irmaa: rowIrmaa,
       rothConversion: rowConversion,
       rothConversionTax: rowConversionTax,
+      totalTaxes: isRetired
+        ? rowFederalTax +
+          rowStateTax +
+          rowSocialSecurityTax +
+          niit +
+          rowIrmaa +
+          rowConversionTax
+        : rowFederalTax + rowStateTax + niit,
       withdrawalSources: rowWithdrawalSources,
       spending: rowSpending,
       householdNetCashFlow: rowNetCashFlow,
@@ -2325,8 +2344,7 @@ function withdrawalDetailsMarkup(row) {
 
 function timelineRowMarkup(row) {
   const override = row.overrides;
-  const taxesTotal =
-    row.niit + row.socialSecurityTax + row.irmaa + row.rothConversionTax;
+  const taxesTotal = row.totalTaxes;
   const extraField = row.isRetired ? "extraWithdrawal" : "extraCashNeed";
   const extraDefault = row.isRetired ? row.extraWithdrawal : row.extraCashNeed;
   return `<tr data-timeline-row="${row.age}" class="${row.hasOverride ? "has-override" : ""}">
@@ -2362,8 +2380,7 @@ function updateTimelineComputedCells(rows) {
     const tr = document.querySelector(`[data-timeline-row="${row.age}"]`);
     if (!tr) return;
     tr.classList.toggle("has-override", row.hasOverride);
-    const taxesTotal =
-      row.niit + row.socialSecurityTax + row.irmaa + row.rothConversionTax;
+    const taxesTotal = row.totalTaxes;
     tr.querySelector('[data-col="socialSecurity"]').textContent =
       row.socialSecurityGrossBenefit > 0
         ? money(row.socialSecurityGrossBenefit)
