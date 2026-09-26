@@ -300,7 +300,12 @@ function migrateLegacySavingsAllocation(rawProfile) {
   };
 }
 
-function calculateContributions(profile, salaryOverride, otherIncomeOverride) {
+function calculateContributions(
+  profile,
+  salaryOverride,
+  otherIncomeOverride,
+  extraCashNeed,
+) {
   const salaryInput =
     salaryOverride != null ? salaryOverride : profile.annualSalary;
   const otherIncomeInput =
@@ -323,12 +328,16 @@ function calculateContributions(profile, salaryOverride, otherIncomeOverride) {
     taxableIncome - currentFederalTax - currentStateTax,
   );
   const rothIra = iraContributionAmount(profile, "rothIraAnnual");
-  // Available Annual Savings = after-tax income minus current expenses minus the Roth IRA
-  // contribution; it can never go negative, so Brokerage/Cash allocations never create
-  // additional negative cash flow.
+  const extraCashNeedAmount = Math.max(0, numberValue(extraCashNeed));
+  // Available Annual Savings = after-tax income minus current expenses, the Roth IRA
+  // contribution, and any Extra Cash Need; it can never go negative, so a large Extra Cash
+  // Need first reduces Brokerage/Cash contributions to zero before any deficit is created.
   const availableAnnualSavings = Math.max(
     0,
-    afterTaxIncome - numberValue(profile.currentAnnualExpenses) - rothIra,
+    afterTaxIncome -
+      numberValue(profile.currentAnnualExpenses) -
+      rothIra -
+      extraCashNeedAmount,
   );
   const savingsAllocation = normalizedSavingsAllocation(profile);
   const brokerage = availableAnnualSavings * savingsAllocation.brokerage;
@@ -956,6 +965,7 @@ function buildTimelineRows(profile) {
         profile,
         salaryForYear,
         profile.otherAnnualIncome,
+        extraCashNeed,
       );
       contributionDetails = { ...contributions };
       rowFederalTax = contributions.currentFederalTax;
