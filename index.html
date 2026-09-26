@@ -330,7 +330,7 @@
 
           <section class="page-view" data-view="timeline" aria-labelledby="timeline-heading" hidden>
             <div class="page-intro">
-              <div><span class="eyebrow">ADJUST IT TO YOUR REALITY</span><h2 id="timeline-heading">Wealth timeline</h2><p>Override any modeled year to reflect what actually happened or what you expect ahead. Leave a field blank to keep the model's value.</p></div>
+              <div><span class="eyebrow">ADJUST IT TO YOUR REALITY</span><h2 id="timeline-heading">Wealth timeline</h2><p>See how your income, savings, withdrawals, taxes, and portfolio change over time.</p></div>
               <button class="button button-quiet" id="timeline-reset-button" type="button">Reset timeline overrides</button>
             </div>
             <div class="timeline-summary">
@@ -340,12 +340,12 @@
             </div>
             <section class="panel timeline-strategy-panel" aria-label="Model-generated retirement strategy">
               <div class="panel-label">Model-generated retirement strategy</div>
-              <p class="panel-supporting-text">Uses your Plan Setup claim age and a model-generated Roth conversion plan by default. Switch either strategy below to compare an alternative.</p>
+              <p class="panel-supporting-text">Review or adjust the strategies used in your retirement projection.</p>
               <div id="strategy-summary" class="strategy-summary"></div>
               <div class="form-grid" id="strategy-fields"></div>
             </section>
             <section class="panel table-panel" aria-label="Social Security claiming-age comparison">
-              <div class="table-header"><div><span class="panel-label">Social Security claiming-age comparison</span><p>Illustrative early/delayed claiming values based on the modeled full-retirement-age benefit. The starred row is the active claiming age. Single-filer estimate; spousal benefits are not modeled.</p></div></div>
+              <div class="table-header"><div><span class="metric-label-row has-help"><span class="panel-label">Social Security claiming-age comparison</span><button class="info-button metric-help-button" id="ss-claiming-comparison-help-button" type="button" data-help-target="ss-claiming-comparison-help" aria-expanded="false" aria-controls="ss-claiming-comparison-help" aria-label="About the claiming age comparison">i</button><div class="metric-help" id="ss-claiming-comparison-help" role="tooltip" data-help-button-id="ss-claiming-comparison-help-button" hidden><strong>Claiming Age Comparison</strong><p>Benefits are based on the modeled Full Retirement Age benefit.</p><p>The highlighted row represents the active claiming age used by the plan. Spousal benefits are not modeled.</p></div></span><p>Compare estimated benefits across claiming ages.</p></div></div>
               <table class="ss-claiming-table">
                 <thead>
                   <tr><th scope="col">Claim age</th><th scope="col">Annual benefit</th><th scope="col">Monthly benefit</th></tr>
@@ -358,62 +358,81 @@
               <div id="timeline-milestones" class="timeline-milestones"></div>
             </section>
             <section class="panel timeline-table-panel" aria-label="Editable year-by-year timeline">
-              <div class="panel-label">Year-by-year detail</div>
-              <p class="panel-supporting-text">Working-year contribution totals can be expanded to review each account category. Employer match is included in account contributions but is not household cash flow.</p>
-              <p class="panel-supporting-text">Cash Surplus / Deficit reflects remaining cash after planned spending and savings activity; portfolio withdrawals and mandatory RMDs are shown separately. Withdrawal values are simplified educational estimates.</p>
-              <p class="panel-supporting-text">During working years, Extra Cash Need first reduces Additional Annual Savings (Brokerage and Cash contributions). Only after available savings are exhausted will the model show a cash deficit or require portfolio withdrawals.</p>
-              <p class="panel-supporting-text">Income overrides apply during working years; spending and withdrawal overrides apply during retirement.</p>
+              <div class="metric-label-row has-help"><div class="panel-label">Year-by-year detail</div><button class="info-button metric-help-button" id="timeline-year-detail-help-button" type="button" data-help-target="timeline-year-detail-help" aria-expanded="false" aria-controls="timeline-year-detail-help" aria-label="About year-by-year detail">i</button><div class="metric-help" id="timeline-year-detail-help" role="tooltip" data-help-button-id="timeline-year-detail-help-button" hidden><strong>Year-by-Year Detail</strong><p>Editable fields allow you to replace modeled values for individual years. Leave a field blank to continue using the model.</p><p>Working Years: Income, Additional Need. Retirement Years: Extra Withdrawal.</p><p>Expand Savings, Withdrawal Details, and Portfolio Value to view account-level details.</p></div></div>
+              <p class="panel-supporting-text">Review each year's projected activity and expand values for additional detail.</p>
               <div class="timeline-table-wrapper">
                 <table class="timeline-table">
                   <thead>
                     <tr>
                       <th scope="col">Age</th>
-                      <th scope="col">Return %</th>
-                      <th scope="col">Income</th>
-                      <th scope="col">Social Security</th>
-                      <th scope="col">Roth conversion</th>
-                      <th scope="col">Expenses / spending</th>
-                      <th scope="col">Extra withdrawal</th>
-                      <th scope="col">Savings (expand)</th>
-                      <th scope="col" class="has-help"><span class="metric-label-row">Withdrawal Detail <button class="info-button metric-help-button" id="timeline-withdrawal-sequence-help-button" type="button" data-help-target="timeline-withdrawal-sequence-help" aria-expanded="false" aria-controls="timeline-withdrawal-sequence-help" aria-label="About Withdrawal Sequence">i</button></span>
-                        <div class="metric-help timeline-table-help" id="timeline-withdrawal-sequence-help" role="tooltip" data-help-button-id="timeline-withdrawal-sequence-help-button" hidden>
-                          <strong>Withdrawal Sequence</strong>
-                          <p>WealthMap uses a simplified withdrawal sequence to fund retirement spending:</p>
-                          <ul>
-                            <li>Cash reserves</li>
-                            <li>Taxable brokerage accounts</li>
-                            <li>Traditional IRA and 401(k) accounts</li>
-                            <li>Roth IRA accounts</li>
-                          </ul>
-                          <p>Required Minimum Distributions (RMDs) are taken when applicable and are shown separately.</p>
-                          <p>During positive market years, the model may replenish cash reserves from brokerage assets based on your Cash Reserve target setting.</p>
-                          <p>This withdrawal sequence is a planning assumption and may not be optimal for every tax situation.</p>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Return % <button class="info-button metric-help-button" id="timeline-return-help-button" type="button" data-help-target="timeline-return-help" aria-expanded="false" aria-controls="timeline-return-help" aria-label="About Return %">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-return-help" role="tooltip" data-help-button-id="timeline-return-help-button" hidden>
+                          <strong>Return %</strong>
+                          <p>The investment return used for this year. Override this value to model a specific positive or negative market year.</p>
                         </div>
                       </th>
-                      <th scope="col">RMD</th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Income <button class="info-button metric-help-button" id="timeline-income-help-button" type="button" data-help-target="timeline-income-help" aria-expanded="false" aria-controls="timeline-income-help" aria-label="About Income">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-income-help" role="tooltip" data-help-button-id="timeline-income-help-button" hidden>
+                          <strong>Income</strong>
+                          <p>Employment and recurring income during working years. Social Security is shown separately once benefits begin.</p>
+                        </div>
+                      </th>
+                      <th scope="col">Social Security</th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Roth conversion <button class="info-button metric-help-button" id="timeline-roth-conversion-help-button" type="button" data-help-target="timeline-roth-conversion-help" aria-expanded="false" aria-controls="timeline-roth-conversion-help" aria-label="About Roth conversion">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-roth-conversion-help" role="tooltip" data-help-button-id="timeline-roth-conversion-help-button" hidden>
+                          <strong>Roth Conversion</strong>
+                          <p>Amount moved from a tax-deferred retirement account into a Roth account. Conversions may generate taxes but are not additional income.</p>
+                        </div>
+                      </th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Spending <button class="info-button metric-help-button" id="timeline-spending-help-button" type="button" data-help-target="timeline-spending-help" aria-expanded="false" aria-controls="timeline-spending-help" aria-label="About Spending">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-spending-help" role="tooltip" data-help-button-id="timeline-spending-help-button" hidden>
+                          <strong>Spending</strong>
+                          <p>Current expenses during working years and retirement spending after retirement begins.</p>
+                        </div>
+                      </th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Additional Need <button class="info-button metric-help-button" id="timeline-additional-need-help-button" type="button" data-help-target="timeline-additional-need-help" aria-expanded="false" aria-controls="timeline-additional-need-help" aria-label="About Additional Need">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-additional-need-help" role="tooltip" data-help-button-id="timeline-additional-need-help-button" hidden>
+                          <strong>Additional Need</strong>
+                          <p>Working Years: represents unexpected or additional cash needs. These reduce Brokerage and Cash savings before creating a deficit.</p>
+                          <p>Retirement Years: represents spending beyond the normal retirement spending goal.</p>
+                        </div>
+                      </th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Savings (expand) <button class="info-button metric-help-button" id="timeline-savings-help-button" type="button" data-help-target="timeline-savings-help" aria-expanded="false" aria-controls="timeline-savings-help" aria-label="About Savings">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-savings-help" role="tooltip" data-help-button-id="timeline-savings-help-button" hidden>
+                          <strong>Savings</strong>
+                          <p>Total annual contributions across retirement accounts, Brokerage investments, and Cash. Expand to view contributions by account.</p>
+                        </div>
+                      </th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">Withdrawal Detail <button class="info-button metric-help-button" id="timeline-withdrawal-sequence-help-button" type="button" data-help-target="timeline-withdrawal-sequence-help" aria-expanded="false" aria-controls="timeline-withdrawal-sequence-help" aria-label="About Withdrawal Sequence">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-withdrawal-sequence-help" role="tooltip" data-help-button-id="timeline-withdrawal-sequence-help-button" hidden>
+                          <strong>Withdrawal Detail</strong>
+                          <p>Shows how retirement withdrawals are funded. WealthMap generally uses Cash, Brokerage, Tax-Deferred Accounts, and Roth Accounts.</p>
+                          <p>RMDs are shown separately.</p>
+                        </div>
+                      </th>
+                      <th scope="col" class="has-help"><span class="metric-label-row">RMD <button class="info-button metric-help-button" id="timeline-rmd-help-button" type="button" data-help-target="timeline-rmd-help" aria-expanded="false" aria-controls="timeline-rmd-help" aria-label="About RMD">i</button></span>
+                        <div class="metric-help timeline-table-help" id="timeline-rmd-help" role="tooltip" data-help-button-id="timeline-rmd-help-button" hidden>
+                          <strong>RMD</strong>
+                          <p>Required Minimum Distribution. Mandatory withdrawals from eligible tax-deferred retirement accounts once RMD age is reached.</p>
+                        </div>
+                      </th>
                       <th scope="col" class="has-help"><span class="metric-label-row">Taxes <button class="info-button metric-help-button" id="timeline-taxes-help-button" type="button" data-help-target="timeline-taxes-help" aria-expanded="false" aria-controls="timeline-taxes-help" aria-label="About Taxes">i</button></span>
                         <div class="metric-help timeline-table-help" id="timeline-taxes-help" role="tooltip" data-help-button-id="timeline-taxes-help-button" hidden>
                           <strong>Taxes</strong>
-                          <p>Estimated taxes and tax-related charges for the year. During working years this includes federal and state income taxes. During retirement it may also include Social Security taxation, NIIT, IRMAA surcharges, and taxes associated with Roth conversions.</p>
+                          <p>Estimated taxes and tax-related charges for the year. May include federal taxes, state taxes, Social Security taxation, NIIT, IRMAA surcharges, and Roth conversion taxes.</p>
                         </div>
                       </th>
                       <th scope="col" class="has-help"><span class="metric-label-row">Cash Surplus / Deficit <button class="info-button metric-help-button" id="timeline-cash-flow-help-button" type="button" data-help-target="timeline-cash-flow-help" aria-expanded="false" aria-controls="timeline-cash-flow-help" aria-label="About Cash Surplus / Deficit">i</button></span>
                         <div class="metric-help timeline-table-help" id="timeline-cash-flow-help" role="tooltip" data-help-button-id="timeline-cash-flow-help-button" hidden>
                           <strong>Cash Surplus / Deficit</strong>
-                          <p><strong>Working Years</strong></p>
-                          <p>Cash remaining after estimated taxes, expenses, retirement contributions, brokerage investments, cash savings, and any additional cash needs.</p>
-                          <p>Extra Cash Need first reduces Brokerage and Cash contributions (Additional Annual Savings) before creating a deficit or requiring a portfolio withdrawal.</p>
-                          <p>Positive values indicate money left over after your planned spending and savings activities.</p>
-                          <p>Negative values indicate additional funds were required beyond your available cash flow and savings.</p>
-                          <p><strong>Retirement Years</strong></p>
-                          <p>Represents the difference between retirement income sources and retirement spending obligations.</p>
-                          <p>Portfolio withdrawals and required minimum distributions (RMDs) are shown separately.</p>
+                          <p>Cash remaining after income, taxes, spending, and planned savings.</p>
+                          <p>Negative values indicate available cash flow and flexible savings were insufficient for that year.</p>
                         </div>
                       </th>
                       <th scope="col" class="has-help"><span class="metric-label-row">Portfolio Value <button class="info-button metric-help-button" id="timeline-portfolio-value-help-button" type="button" data-help-target="timeline-portfolio-value-help" aria-expanded="false" aria-controls="timeline-portfolio-value-help" aria-label="About Portfolio Value">i</button></span>
                         <div class="metric-help timeline-table-help" id="timeline-portfolio-value-help" role="tooltip" data-help-button-id="timeline-portfolio-value-help-button" hidden>
                           <strong>Portfolio Value</strong>
-                          <p>Portfolio Value shows the total modeled financial assets at the end of the year. Expand any row to see balances by account type, including Brokerage, Tax-Deferred Retirement Accounts, Roth Accounts, and Cash. Real Estate is not included.</p>
+                          <p>Total financial assets at the end of the year. Expand to view balances by account type. Real Estate is not included.</p>
                         </div>
                       </th>
                       <th scope="col"></th>

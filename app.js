@@ -2104,17 +2104,41 @@ function renderTimelineSummary(rows) {
   $("#timeline-overridden-count").textContent = String(summary.overriddenYears);
 }
 
+// Short, concept-level explanations shown via an info button on milestone cards
+// that need more than a one-line metric to be understood.
+const MILESTONE_HELP_CONTENT = {
+  rmd: {
+    title: "RMD",
+    text: "Required Minimum Distribution: a mandatory withdrawal from eligible tax-deferred retirement accounts once RMD age is reached.",
+  },
+  irmaa: {
+    title: "IRMAA",
+    text: "An income-related Medicare surcharge that can apply once income exceeds an editable threshold.",
+  },
+  rothConversion: {
+    title: "Roth Conversion Milestones",
+    text: "Marks the modeled window WealthMap uses to convert tax-deferred savings into a Roth account.",
+  },
+  withdrawalShift: {
+    title: "Withdrawal Source Shift",
+    text: "Marks when modeled retirement spending begins relying primarily on tax-deferred or Roth withdrawals instead of cash and brokerage.",
+  },
+};
+
 function buildTimelineMilestones(rows, profile, ssPlan) {
   if (!rows.length) return [];
 
   const summary = timelineSummary(rows, profile);
   const byAge = new Map();
-  const addMilestone = (age, label, description) => {
+  const addMilestone = (age, label, metric, helpKey) => {
     if (!Number.isFinite(age)) return;
-    const current = byAge.get(age) || { age, labels: [], description: [] };
+    const current =
+      byAge.get(age) || { age, labels: [], metrics: [], helpKeys: [] };
     if (!current.labels.includes(label)) current.labels.push(label);
-    if (description && !current.description.includes(description))
-      current.description.push(description);
+    if (metric && !current.metrics.includes(metric))
+      current.metrics.push(metric);
+    if (helpKey && !current.helpKeys.includes(helpKey))
+      current.helpKeys.push(helpKey);
     byAge.set(age, current);
   };
 
@@ -2123,7 +2147,7 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       retirementRow.age,
       "Retirement begins",
-      `Retirement begins in the modeled plan at age ${retirementRow.age}.`,
+      `Portfolio: ${money(retirementRow.endTotal)}`,
     );
   }
 
@@ -2135,36 +2159,34 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
       addMilestone(
         socialSecurityRow.age,
         "Social Security begins",
-        `Social Security begins at age ${socialSecurityRow.age} (${ssPlan.source === "auto" ? "model-recommended" : "manual"} claiming age): ${money(ssPlan.annualBenefit)}/year.`,
+        `${money(ssPlan.annualBenefit)} / year`,
       );
     }
   }
 
   const conversionRows = rows.filter((row) => row.rothConversion > 0);
   if (conversionRows.length) {
-    const firstAge = conversionRows[0].age;
-    const lastAge = conversionRows[conversionRows.length - 1].age;
+    const firstRow = conversionRows[0];
+    const lastRow = conversionRows[conversionRows.length - 1];
     addMilestone(
-      firstAge,
+      firstRow.age,
       "Roth conversions begin",
-      `Model-generated Roth conversions begin at age ${firstAge}.`,
+      money(firstRow.rothConversion),
+      "rothConversion",
     );
-    if (lastAge !== firstAge) {
+    if (lastRow.age !== firstRow.age) {
       addMilestone(
-        lastAge,
+        lastRow.age,
         "Roth conversions end",
-        `Modeled Roth conversions end at age ${lastAge}, ahead of RMDs.`,
+        money(lastRow.rothConversion),
+        "rothConversion",
       );
     }
   }
 
   const firstRmdRow = rows.find((row) => row.isRetired && row.rmd > 0);
   if (firstRmdRow) {
-    addMilestone(
-      firstRmdRow.age,
-      "First RMD",
-      `Required minimum distributions begin at age ${firstRmdRow.age}.`,
-    );
+    addMilestone(firstRmdRow.age, "First RMD", money(firstRmdRow.rmd), "rmd");
   }
 
   const firstIrmaaRow = rows.find((row) => row.isRetired && row.irmaa > 0);
@@ -2172,7 +2194,8 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       firstIrmaaRow.age,
       "First IRMAA year",
-      `A Medicare surcharge is projected starting at age ${firstIrmaaRow.age}.`,
+      `${money(firstIrmaaRow.irmaa)} surcharge`,
+      "irmaa",
     );
   }
 
@@ -2185,7 +2208,8 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
     addMilestone(
       transitionRow.age,
       "Withdrawal source shifts",
-      `Modeled spending begins relying primarily on tax-deferred or Roth withdrawals at age ${transitionRow.age}.`,
+      `Portfolio: ${money(transitionRow.endTotal)}`,
+      "withdrawalShift",
     );
   }
 
@@ -2195,24 +2219,18 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
   addMilestone(
     peakRow.age,
     "Peak portfolio value",
-    `The portfolio reaches its projected peak around age ${peakRow.age}.`,
+    `Portfolio: ${money(peakRow.endTotal)}`,
   );
 
   if (summary.depletionAge != null) {
-    addMilestone(
-      summary.depletionAge,
-      "Portfolio depletion",
-      `The plan is projected to run out of invested assets at age ${summary.depletionAge}.`,
-    );
+    addMilestone(summary.depletionAge, "Portfolio depletion", "Portfolio depleted");
   }
 
-  const rowsByAge = new Map(rows.map((row) => [row.age, row]));
   return [...byAge.values()]
     .map((milestone) => ({
       ...milestone,
       label: milestone.labels.join(" • "),
-      detail: milestone.description[0] || "Modeled retirement transition.",
-      projectedValue: rowsByAge.get(milestone.age)?.endTotal ?? null,
+      metric: milestone.metrics.join(" • "),
     }))
     .sort((a, b) => a.age - b.age)
     .slice(0, 8);
@@ -2229,16 +2247,24 @@ function renderTimelineMilestones(rows, profile, ssPlan) {
   }
 
   container.innerHTML = milestones
-    .map(
-      (milestone) => `
+    .map((milestone) => {
+      const helpButtons = milestone.helpKeys
+        .map((key) => {
+          const help = MILESTONE_HELP_CONTENT[key];
+          if (!help) return "";
+          const buttonId = `milestone-${milestone.age}-${key}-help-button`;
+          const tooltipId = `milestone-${milestone.age}-${key}-help`;
+          return `<button class="info-button metric-help-button" id="${buttonId}" type="button" data-help-target="${tooltipId}" aria-expanded="false" aria-controls="${tooltipId}" aria-label="About ${help.title}">i</button><div class="metric-help" id="${tooltipId}" role="tooltip" data-help-button-id="${buttonId}" hidden><strong>${help.title}</strong><p>${help.text}</p></div>`;
+        })
+        .join("");
+      return `
         <div class="milestone">
           <span>Age ${milestone.age}</span>
-          <strong>${milestone.label}</strong>
-          <p>${milestone.detail}</p>
-          ${milestone.projectedValue != null ? `<p class="milestone-value">Projected financial assets: ${money(milestone.projectedValue)}</p>` : ""}
+          <strong class="metric-label-row has-help">${milestone.label}${helpButtons}</strong>
+          <p>${milestone.metric}</p>
         </div>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
@@ -2423,7 +2449,8 @@ function renderStrategySummary(ssPlan, profile, summary) {
     <div class="strategy-summary-item">
       <span class="has-help">Social Security<button class="info-button metric-help-button" id="ss-strategy-help-button" type="button" data-help-target="ss-strategy-help" aria-expanded="false" aria-controls="ss-strategy-help" aria-label="About the Social Security strategy">i</button>
         <div class="metric-help" id="ss-strategy-help" role="tooltip" data-help-button-id="ss-strategy-help-button" hidden>
-          <p>Evaluated using your current plan assumptions. Select the manual strategy to use the claim age entered in Plan Setup.</p>
+          <strong>Social Security Strategy</strong>
+          <p>Determines when Social Security begins. Use the claim age entered in Plan Setup or allow WealthMap to evaluate multiple claiming ages and recommend the option that best supports the current plan.</p>
         </div>
       </span>
       <p>${ssText}</p>
@@ -2431,7 +2458,8 @@ function renderStrategySummary(ssPlan, profile, summary) {
     <div class="strategy-summary-item">
       <span class="has-help">Roth conversions<button class="info-button metric-help-button" id="roth-strategy-help-button" type="button" data-help-target="roth-strategy-help" aria-expanded="false" aria-controls="roth-strategy-help" aria-label="About the Roth conversion strategy">i</button>
         <div class="metric-help" id="roth-strategy-help" role="tooltip" data-help-button-id="roth-strategy-help-button" hidden>
-          <p>Uses your current assumptions to estimate available conversion opportunities. Actual tax results may differ.</p>
+          <strong>Roth Conversion Strategy</strong>
+          <p>Determines whether Roth conversions use a model-generated approach or a fixed annual amount entered in Plan Setup. Conversions may increase taxes today while reducing future tax-deferred balances.</p>
         </div>
       </span>
       <p>${conversionText}</p>

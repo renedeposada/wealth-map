@@ -57,12 +57,13 @@ test("required plan setup validation standby message is preserved", () => {
 
 test("model-generated strategy labels remain understandable", () => {
   assert.ok(appJs.includes("Model-recommended"));
-  assert.ok(appJs.includes("Evaluated using your current plan assumptions"));
+  assert.ok(appJs.includes("Social Security Strategy"));
   assert.ok(
     appJs.includes(
-      "Uses your current assumptions to estimate available conversion opportunities",
+      "allow WealthMap to evaluate multiple claiming ages and recommend the option that best supports the current plan",
     ),
   );
+  assert.ok(appJs.includes("Roth Conversion Strategy"));
 });
 
 test("contextual strategy tooltips remain keyboard accessible buttons", () => {
@@ -94,17 +95,9 @@ test("withdrawal detail has a contextual explanatory tooltip for the retirement 
       'id="timeline-withdrawal-sequence-help" role="tooltip" data-help-button-id="timeline-withdrawal-sequence-help-button" hidden',
     ),
   );
-  assert.ok(indexHtml.includes("Withdrawal Sequence"));
-  assert.ok(indexHtml.includes("Cash reserves"));
-  assert.ok(indexHtml.includes("Taxable brokerage accounts"));
-  assert.ok(indexHtml.includes("Traditional IRA and 401(k) accounts"));
-  assert.ok(indexHtml.includes("Roth IRA accounts"));
-  assert.ok(indexHtml.includes("Required Minimum Distributions (RMDs) are taken when applicable and are shown separately."));
-  assert.ok(
-    indexHtml.includes(
-      "During positive market years, the model may replenish cash reserves from brokerage assets based on your Cash Reserve target setting.",
-    ),
-  );
+  assert.ok(indexHtml.includes("Shows how retirement withdrawals are funded."));
+  assert.ok(indexHtml.includes("Cash, Brokerage, Tax-Deferred Accounts, and Roth Accounts"));
+  assert.ok(indexHtml.includes("RMDs are shown separately."));
 });
 
 test("additional annual savings explains the brokerage and cash allocation", () => {
