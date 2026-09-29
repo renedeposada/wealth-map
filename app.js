@@ -2022,75 +2022,93 @@ function recommendations(metrics, profile) {
     items.push({
       priority: "HIGH PRIORITY",
       className: "",
+      severity: 100,
       title: "Address projected portfolio depletion",
-      situation: `Assets are projected to be depleted by age ${metrics.timelineDepletionAge}, before life expectancy.`,
-      action:
+      currentSituation: `Assets are projected to be depleted by age ${metrics.timelineDepletionAge}, before life expectancy.`,
+      recommendedAction:
         "Increasing savings, delaying retirement or Social Security, or reducing retirement spending may improve plan sustainability.",
       whyItMatters:
         "The year-by-year timeline projects the portfolio reaching $0 before the end of the plan.",
     });
   if (metrics.fundingDelta > 0)
     items.push({
-      priority: "MEDIUM PRIORITY",
-      className: "medium",
+      priority: "HIGH PRIORITY",
+      className: "",
+      severity: 90,
       title: "Address the projected funding gap",
-      situation: `The plan currently has a projected funding gap of ${money(metrics.fundingDelta)}.`,
-      action:
+      currentSituation: `The plan currently has a projected funding gap of ${money(metrics.fundingDelta)}.`,
+      recommendedAction:
         "Consider increasing annual savings, delaying retirement, reducing retirement spending, or combining these actions.",
       whyItMatters:
         "Projected assets are below the amount the model estimates is needed to fund retirement through life expectancy.",
     });
   if (profile.retirementAnnualSpendingGoal > metrics.safeSpending)
     items.push({
-      priority: "MEDIUM PRIORITY",
-      className: "medium",
+      priority: "HIGH PRIORITY",
+      className: "",
+      severity: 80,
       title: "Align retirement spending with the estimate",
-      situation: `Retirement spending goal: ${money(profile.retirementAnnualSpendingGoal)} per year; estimated safe spending: ${money(metrics.safeSpending)} per year.`,
-      action: `Reduce the retirement spending goal by approximately ${money(profile.retirementAnnualSpendingGoal - metrics.safeSpending)} per year to align with the plan's estimated safe spending level.`,
+      currentSituation: `Retirement spending goal: ${money(profile.retirementAnnualSpendingGoal)} per year; estimated safe spending: ${money(metrics.safeSpending)} per year.`,
+      recommendedAction: `Reduce the retirement spending goal by approximately ${money(profile.retirementAnnualSpendingGoal - metrics.safeSpending)} per year to align with the plan's estimated safe spending level.`,
       whyItMatters:
         "The current spending goal is higher than the amount the timeline estimates can be sustained through life expectancy.",
     });
   const rothStrategyEnabled =
     profile.rothConversionStrategy === "auto" ||
     numberValue(profile.rothConversionAnnualAmount) > 0;
+  let rothRecommendation = null;
   if (rothStrategyEnabled || metrics.projectedRothConversion > 0) {
     const hasModeledConversion = metrics.projectedRothConversion > 0;
-    items.push({
+    rothRecommendation = {
       priority: "MEDIUM PRIORITY",
       className: "medium",
+      severity: 70,
       title: "Consider Roth Conversions",
-      situation: hasModeledConversion
+      currentSituation: hasModeledConversion
         ? `The timeline projects Roth conversions beginning at age ${metrics.firstRothConversionAge}.`
         : "The Roth conversion strategy is selected, but current inputs produce no projected conversion amount.",
-      action: hasModeledConversion
+      recommendedAction: hasModeledConversion
         ? `The model projects approximately ${money(metrics.firstRothConversionAmount)} in the first conversion year. Consider converting this amount from Traditional IRA/401(k) assets to Roth accounts during lower-income years.`
         : "Review the Roth conversion strategy and plan inputs on the Wealth Timeline; no conversion amount is currently modeled.",
       whyItMatters:
         "Roth conversions may reduce future RMDs, improve tax diversification, and help manage future taxable income.",
-    });
+    };
+    items.push(rothRecommendation);
   }
-  if (
+  const hasRmdExposure =
     metrics.financialAssets > 0 &&
     taxDeferred > metrics.financialAssets * 0.5 &&
-    metrics.projectedRmd > 0
-  )
+    metrics.projectedRmd > 0;
+  if (hasRmdExposure) {
+    const rmdSituation = `Required minimum distributions are projected later in retirement, totaling ${money(metrics.projectedRmd)} across the modeled timeline.`;
+    if (rothRecommendation) {
+      rothRecommendation.currentSituation += ` ${rmdSituation}`;
+      rothRecommendation.recommendedAction +=
+        " Review the projected RMD exposure when considering conversion timing.";
+      rothRecommendation.whyItMatters +=
+        " The timeline's RMD estimate gives context for evaluating this conversion opportunity.";
+    } else {
+      items.push({
+        priority: "MEDIUM PRIORITY",
+        className: "medium",
+        severity: 65,
+        title: "Reduce Future RMD Exposure",
+        currentSituation: rmdSituation,
+        recommendedAction:
+          "Evaluate converting a portion of tax-deferred assets to Roth accounts before RMD age.",
+        whyItMatters:
+          "Reducing future RMDs may improve withdrawal flexibility and lower future taxable income.",
+      });
+    }
+  }
+  if (metrics.savingsRate < 0.2)
     items.push({
       priority: "MEDIUM PRIORITY",
       className: "medium",
-      title: "Reduce Future RMD Exposure",
-      situation: `Required minimum distributions are projected later in retirement, totaling ${money(metrics.projectedRmd)} across the modeled timeline.`,
-      action:
-        "Evaluate converting a portion of tax-deferred assets to Roth accounts before RMD age.",
-      whyItMatters:
-        "Reducing future RMDs may improve withdrawal flexibility and lower future taxable income.",
-    });
-  if (metrics.savingsRate < 0.2)
-    items.push({
-      priority: "HIGH PRIORITY",
-      className: "",
+      severity: 60,
       title: "Increase annual savings",
-      situation: `Current savings rate: ${percent(metrics.savingsRate)}.`,
-      action: `Increase annual savings by approximately ${money(Math.max(0, 0.2 * metrics.totalIncome - metrics.employeeSavings))} per year to reach the target savings rate of ${percent(0.2)}.`,
+      currentSituation: `Current savings rate: ${percent(metrics.savingsRate)}.`,
+      recommendedAction: `Increase annual savings by approximately ${money(Math.max(0, 0.2 * metrics.totalIncome - metrics.employeeSavings))} per year to reach the target savings rate of ${percent(0.2)}.`,
       whyItMatters:
         "A higher savings rate adds more to the plan during working years and may improve retirement readiness.",
     });
@@ -2101,9 +2119,10 @@ function recommendations(metrics, profile) {
     items.push({
       priority: "INFORMATIONAL",
       className: "info",
+      severity: 40,
       title: "Review tax diversification",
-      situation: `Approximately ${percent(taxDeferred / metrics.financialAssets)} of financial assets are tax-deferred.`,
-      action:
+      currentSituation: `Approximately ${percent(taxDeferred / metrics.financialAssets)} of financial assets are tax-deferred.`,
+      recommendedAction:
         "Increase future Roth contributions or Roth conversions to improve tax diversification.",
       whyItMatters:
         "Having assets across taxable, tax-deferred, and Roth accounts provides greater flexibility when generating retirement income.",
@@ -2112,14 +2131,15 @@ function recommendations(metrics, profile) {
     items.push({
       priority: "INFORMATIONAL",
       className: "info",
+      severity: 30,
       title: "Manage Future Medicare Surcharges",
-      situation: `Future Medicare IRMAA surcharges are projected beginning around age ${metrics.timelineIrmaaAge}.`,
-      action:
+      currentSituation: `Future Medicare IRMAA surcharges are projected beginning around age ${metrics.timelineIrmaaAge}.`,
+      recommendedAction:
         "Review Roth conversion opportunities and future taxable income levels before Medicare enrollment.",
       whyItMatters:
         "Reducing future taxable income may help limit Medicare premium surcharges.",
     });
-  return items.slice(0, 3);
+  return items.sort((left, right) => right.severity - left.severity).slice(0, 3);
 }
 
 function renderRecommendations(metrics) {
@@ -2135,7 +2155,7 @@ function renderRecommendations(metrics) {
   list.innerHTML = items
     .map(
       (item, index) =>
-        `<article class="recommendation-card"><div class="recommendation-number">${String(index + 1).padStart(2, "0")}</div><div><h3>${item.title}</h3><p><strong>Current Situation:</strong> ${item.situation}</p><p><strong>Recommended Action:</strong> ${item.action}</p><p><strong>Why It Matters:</strong> ${item.whyItMatters}</p></div><span class="priority ${item.className}">${item.priority}</span></article>`,
+        `<article class="recommendation-card"><div class="recommendation-number">${String(index + 1).padStart(2, "0")}</div><div><h3>${item.title}</h3><p><strong>Current Situation:</strong> ${item.currentSituation}</p><p><strong>Recommended Action:</strong> ${item.recommendedAction}</p><p><strong>Why It Matters:</strong> ${item.whyItMatters}</p></div><span class="priority ${item.className}">${item.priority}</span></article>`,
     )
     .join("");
 }

@@ -81,8 +81,8 @@ test("Roth conversion recommendation uses an existing modeled amount", () => {
   );
 
   assert.equal(item.title, "Consider Roth Conversions");
-  assert.match(item.action, /\$12,000/);
-  assert.match(item.situation, /age 60/);
+  assert.match(item.recommendedAction, /\$12,000/);
+  assert.match(item.currentSituation, /age 60/);
 });
 
 test("sample plan conversion metrics flow into the Roth recommendation", () => {
@@ -95,7 +95,9 @@ test("sample plan conversion metrics flow into the Roth recommendation", () => {
   assert.ok(metrics.projectedRothConversion > 0);
   assert.ok(metrics.firstRothConversionAmount > 0);
   assert.ok(item);
-  assert.ok(item.action.includes(money(metrics.firstRothConversionAmount)));
+  assert.ok(
+    item.recommendedAction.includes(money(metrics.firstRothConversionAmount)),
+  );
 });
 
 test("enabled Roth strategy with no projected conversion does not invent an amount", () => {
@@ -105,9 +107,9 @@ test("enabled Roth strategy with no projected conversion does not invent an amou
   );
 
   assert.equal(item.title, "Consider Roth Conversions");
-  assert.match(item.situation, /no projected conversion amount/i);
-  assert.match(item.action, /no conversion amount is currently modeled/i);
-  assert.doesNotMatch(item.action, /\$\d/);
+  assert.match(item.currentSituation, /no projected conversion amount/i);
+  assert.match(item.recommendedAction, /no conversion amount is currently modeled/i);
+  assert.doesNotMatch(item.recommendedAction, /\$\d/);
 });
 
 test("RMD recommendation requires substantial tax-deferred assets and projected RMDs", () => {
@@ -145,8 +147,8 @@ test("Roth, RMD, savings, diversification, and IRMAA recommendations follow the 
     Array.from(items, (item) => item.title),
     [
       "Consider Roth Conversions",
-      "Reduce Future RMD Exposure",
       "Increase annual savings",
+      "Review tax diversification",
     ],
   );
   assert.equal(items.length, 3);
@@ -159,10 +161,31 @@ test("Roth, RMD, savings, diversification, and IRMAA recommendations follow the 
     Array.from(lowerPriorityItems, (item) => item.title),
     ["Review tax diversification", "Manage Future Medicare Surcharges"],
   );
-  assert.match(lowerPriorityItems[0].action, /Roth contributions or Roth conversions/);
+  assert.match(lowerPriorityItems[0].recommendedAction, /Roth contributions or Roth conversions/);
   assert.match(lowerPriorityItems[0].whyItMatters, /taxable, tax-deferred, and Roth/);
-  assert.match(lowerPriorityItems[1].situation, /age 65/);
-  assert.match(lowerPriorityItems[1].action, /before Medicare enrollment/);
+  assert.match(lowerPriorityItems[1].currentSituation, /age 65/);
+  assert.match(lowerPriorityItems[1].recommendedAction, /before Medicare enrollment/);
+});
+
+test("Roth and RMD triggers consolidate their shared conversion guidance", () => {
+  const items = recommendations(
+    baseMetrics({
+      projectedRothConversion: 12000,
+      firstRothConversionAge: 60,
+      firstRothConversionAmount: 12000,
+      projectedRmd: 40000,
+    }),
+    baseProfile({ rothConversionStrategy: "auto" }),
+  );
+  const rothItem = items.find((item) => item.title === "Consider Roth Conversions");
+
+  assert.ok(rothItem);
+  assert.match(rothItem.currentSituation, /\$40,000 across the modeled timeline/);
+  assert.match(rothItem.recommendedAction, /projected RMD exposure/);
+  assert.equal(
+    items.some((item) => item.title === "Reduce Future RMD Exposure"),
+    false,
+  );
 });
 
 test("depletion, funding gap, and spending shortfall remain ahead of Roth recommendations", () => {
@@ -189,6 +212,47 @@ test("depletion, funding gap, and spending shortfall remain ahead of Roth recomm
       "Align retirement spending with the estimate",
     ],
   );
+});
+
+test("recommendation severity and badges match the priority mapping", () => {
+  const cases = [
+    ["Address projected portfolio depletion", 100, "HIGH PRIORITY", {
+      metrics: { timelineDepletionAge: 80 },
+    }],
+    ["Address the projected funding gap", 90, "HIGH PRIORITY", {
+      metrics: { fundingDelta: 1 },
+    }],
+    ["Align retirement spending with the estimate", 80, "HIGH PRIORITY", {
+      profile: { retirementAnnualSpendingGoal: 50001 },
+    }],
+    ["Consider Roth Conversions", 70, "MEDIUM PRIORITY", {
+      metrics: { projectedRothConversion: 1 },
+    }],
+    ["Reduce Future RMD Exposure", 65, "MEDIUM PRIORITY", {
+      metrics: { projectedRmd: 1 },
+    }],
+    ["Increase annual savings", 60, "MEDIUM PRIORITY", {
+      metrics: { savingsRate: 0.1 },
+    }],
+    ["Review tax diversification", 40, "INFORMATIONAL", {}],
+    ["Manage Future Medicare Surcharges", 30, "INFORMATIONAL", {
+      metrics: { timelineIrmaaAge: 65 },
+      profile: { assets: { fourOhOneK: 400000, traditionalIra: 0 } },
+    }],
+  ];
+
+  for (const [title, severity, priority, overrides] of cases) {
+    const [item] = recommendations(
+      baseMetrics(overrides.metrics),
+      baseProfile(overrides.profile),
+    );
+    assert.equal(item.title, title);
+    assert.equal(item.severity, severity);
+    assert.equal(item.priority, priority);
+    assert.ok(item.currentSituation);
+    assert.ok(item.recommendedAction);
+    assert.ok(item.whyItMatters);
+  }
 });
 
 function money(value) {

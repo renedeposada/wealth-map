@@ -48,8 +48,8 @@ test("the disclaimer is not repeated on individual pages or cards", () => {
 });
 
 test("recommendation cards explain the situation, action, and rationale", () => {
-  assert.ok(appJs.includes("<strong>Current Situation:</strong> ${item.situation}"));
-  assert.ok(appJs.includes("<strong>Recommended Action:</strong> ${item.action}"));
+  assert.ok(appJs.includes("<strong>Current Situation:</strong> ${item.currentSituation}"));
+  assert.ok(appJs.includes("<strong>Recommended Action:</strong> ${item.recommendedAction}"));
   assert.ok(appJs.includes("<strong>Why It Matters:</strong> ${item.whyItMatters}"));
   assert.ok(appJs.includes("0.2 * metrics.totalIncome - metrics.employeeSavings"));
   assert.ok(appJs.includes("metrics.fundingDelta"));
