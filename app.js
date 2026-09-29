@@ -790,6 +790,9 @@ function calculate(rawProfile) {
     currentStateTax: contributions.currentStateTax,
     projectedConversionTax: portfolio.conversionTax,
     projectedRmd: timeline.cumulativeRmd,
+    projectedRothConversion: timeline.cumulativeRothConversion,
+    firstRothConversionAge: timeline.firstConversionAge,
+    firstRothConversionAmount: timeline.firstConversionAmount,
     projectedNiit: timeline.cumulativeNiit,
     projectedSocialSecurityTax: timeline.cumulativeSocialSecurityTax,
     projectedIrmaa: timeline.cumulativeIrmaa,
@@ -1291,6 +1294,7 @@ function timelineSummary(rows, profile) {
       cumulativeRothConversionTax: 0,
       firstConversionAge: null,
       lastConversionAge: null,
+      firstConversionAmount: 0,
     };
   }
   const finalAssets = rows[rows.length - 1].endTotal;
@@ -1321,6 +1325,9 @@ function timelineSummary(rows, profile) {
     lastConversionAge: conversionRows.length
       ? conversionRows[conversionRows.length - 1].age
       : null,
+    firstConversionAmount: conversionRows.length
+      ? conversionRows[0].rothConversion
+      : 0,
   };
 }
 
@@ -2010,69 +2017,107 @@ function renderSocialSecuritySchedule(ssPlan) {
 
 function recommendations(metrics, profile) {
   const items = [];
+  const taxDeferred = profile.assets.fourOhOneK + profile.assets.traditionalIra;
   if (metrics.timelineDepletionAge != null)
     items.push({
       priority: "HIGH PRIORITY",
       className: "",
-      title: "Address a projected shortfall year",
-      trigger: `The year-by-year timeline projects assets reaching $0 at age ${metrics.timelineDepletionAge}, before life expectancy.`,
-      metric: `Depletes at age ${metrics.timelineDepletionAge}`,
+      title: "Address projected portfolio depletion",
+      situation: `Assets are projected to be depleted by age ${metrics.timelineDepletionAge}, before life expectancy.`,
       action:
-        "Open the Timeline page to see which years drive the shortfall and adjust spending, returns, or retirement age.",
-      effect:
-        "Calculated from the year-by-year timeline, including any per-year overrides.",
+        "Increasing savings, delaying retirement or Social Security, or reducing retirement spending may improve plan sustainability.",
+      whyItMatters:
+        "The year-by-year timeline projects the portfolio reaching $0 before the end of the plan.",
+    });
+  if (metrics.fundingDelta > 0)
+    items.push({
+      priority: "MEDIUM PRIORITY",
+      className: "medium",
+      title: "Address the projected funding gap",
+      situation: `The plan currently has a projected funding gap of ${money(metrics.fundingDelta)}.`,
+      action:
+        "Consider increasing annual savings, delaying retirement, reducing retirement spending, or combining these actions.",
+      whyItMatters:
+        "Projected assets are below the amount the model estimates is needed to fund retirement through life expectancy.",
+    });
+  if (profile.retirementAnnualSpendingGoal > metrics.safeSpending)
+    items.push({
+      priority: "MEDIUM PRIORITY",
+      className: "medium",
+      title: "Align retirement spending with the estimate",
+      situation: `Retirement spending goal: ${money(profile.retirementAnnualSpendingGoal)} per year; estimated safe spending: ${money(metrics.safeSpending)} per year.`,
+      action: `Reduce the retirement spending goal by approximately ${money(profile.retirementAnnualSpendingGoal - metrics.safeSpending)} per year to align with the plan's estimated safe spending level.`,
+      whyItMatters:
+        "The current spending goal is higher than the amount the timeline estimates can be sustained through life expectancy.",
+    });
+  const rothStrategyEnabled =
+    profile.rothConversionStrategy === "auto" ||
+    numberValue(profile.rothConversionAnnualAmount) > 0;
+  if (rothStrategyEnabled || metrics.projectedRothConversion > 0) {
+    const hasModeledConversion = metrics.projectedRothConversion > 0;
+    items.push({
+      priority: "MEDIUM PRIORITY",
+      className: "medium",
+      title: "Consider Roth Conversions",
+      situation: hasModeledConversion
+        ? `The timeline projects Roth conversions beginning at age ${metrics.firstRothConversionAge}.`
+        : "The Roth conversion strategy is selected, but current inputs produce no projected conversion amount.",
+      action: hasModeledConversion
+        ? `The model projects approximately ${money(metrics.firstRothConversionAmount)} in the first conversion year. Consider converting this amount from Traditional IRA/401(k) assets to Roth accounts during lower-income years.`
+        : "Review the Roth conversion strategy and plan inputs on the Wealth Timeline; no conversion amount is currently modeled.",
+      whyItMatters:
+        "Roth conversions may reduce future RMDs, improve tax diversification, and help manage future taxable income.",
+    });
+  }
+  if (
+    metrics.financialAssets > 0 &&
+    taxDeferred > metrics.financialAssets * 0.5 &&
+    metrics.projectedRmd > 0
+  )
+    items.push({
+      priority: "MEDIUM PRIORITY",
+      className: "medium",
+      title: "Reduce Future RMD Exposure",
+      situation: `Required minimum distributions are projected later in retirement, totaling ${money(metrics.projectedRmd)} across the modeled timeline.`,
+      action:
+        "Evaluate converting a portion of tax-deferred assets to Roth accounts before RMD age.",
+      whyItMatters:
+        "Reducing future RMDs may improve withdrawal flexibility and lower future taxable income.",
     });
   if (metrics.savingsRate < 0.2)
     items.push({
       priority: "HIGH PRIORITY",
       className: "",
       title: "Increase annual savings",
-      trigger: "Savings rate is below the 20% target threshold.",
-      metric: `${percent(metrics.savingsRate)} savings rate`,
-      action: "Consider increasing the annual savings input.",
-      effect: "Qualitative; may reduce the projected funding gap.",
+      situation: `Current savings rate: ${percent(metrics.savingsRate)}.`,
+      action: `Increase annual savings by approximately ${money(Math.max(0, 0.2 * metrics.totalIncome - metrics.employeeSavings))} per year to reach the target savings rate of ${percent(0.2)}.`,
+      whyItMatters:
+        "A higher savings rate adds more to the plan during working years and may improve retirement readiness.",
     });
-  if (metrics.fundingDelta > 0)
-    items.push({
-      priority: "MEDIUM PRIORITY",
-      className: "medium",
-      title: "Review retirement timing",
-      trigger: "Projected assets do not fully cover the retirement target.",
-      metric: `${money(metrics.fundingDelta)} funding gap`,
-      action: "Compare a later retirement age or a higher savings amount.",
-      effect: "Qualitative; scenario effects update when inputs change.",
-    });
-  if (profile.retirementAnnualSpendingGoal > metrics.safeSpending)
-    items.push({
-      priority: "MEDIUM PRIORITY",
-      className: "medium",
-      title: "Review retirement spending goal",
-      trigger: "The spending goal is above the current safe-spending estimate.",
-      metric: `${money(profile.retirementAnnualSpendingGoal)} annual goal`,
-      action: "Compare a lower spending scenario.",
-      effect: "Qualitative; may improve readiness.",
-    });
-  const taxDeferred = profile.assets.fourOhOneK + profile.assets.traditionalIra;
-  if (taxDeferred > metrics.financialAssets * 0.5)
+  if (
+    metrics.financialAssets > 0 &&
+    taxDeferred > metrics.financialAssets * 0.5
+  )
     items.push({
       priority: "INFORMATIONAL",
       className: "info",
       title: "Review tax diversification",
-      trigger: "Most investable assets are tax-deferred.",
-      metric: `${percent(taxDeferred / metrics.financialAssets)} tax-deferred share`,
-      action: "Learn about future account withdrawal sequencing.",
-      effect: "General guidance; not a calculated projection.",
+      situation: `Approximately ${percent(taxDeferred / metrics.financialAssets)} of financial assets are tax-deferred.`,
+      action:
+        "Increase future Roth contributions or Roth conversions to improve tax diversification.",
+      whyItMatters:
+        "Having assets across taxable, tax-deferred, and Roth accounts provides greater flexibility when generating retirement income.",
     });
   if (metrics.timelineIrmaaAge != null)
     items.push({
       priority: "INFORMATIONAL",
       className: "info",
-      title: "Watch for an IRMAA surcharge year",
-      trigger: `The timeline projects Medicare income-related surcharges starting at age ${metrics.timelineIrmaaAge}.`,
-      metric: `First IRMAA year: age ${metrics.timelineIrmaaAge}`,
+      title: "Manage Future Medicare Surcharges",
+      situation: `Future Medicare IRMAA surcharges are projected beginning around age ${metrics.timelineIrmaaAge}.`,
       action:
-        "Review projected RMD and Social Security timing on the Timeline page.",
-      effect: "Calculated from your year-by-year timeline.",
+        "Review Roth conversion opportunities and future taxable income levels before Medicare enrollment.",
+      whyItMatters:
+        "Reducing future taxable income may help limit Medicare premium surcharges.",
     });
   return items.slice(0, 3);
 }
@@ -2090,7 +2135,7 @@ function renderRecommendations(metrics) {
   list.innerHTML = items
     .map(
       (item, index) =>
-        `<article class="recommendation-card"><div class="recommendation-number">${String(index + 1).padStart(2, "0")}</div><div><h3>${item.title}</h3><p><strong>Trigger:</strong> ${item.trigger}</p><p><strong>Current metric:</strong> ${item.metric}</p><p><strong>Suggested action:</strong> ${item.action}</p><p><strong>Effect:</strong> ${item.effect}</p></div><span class="priority ${item.className}">${item.priority}</span></article>`,
+        `<article class="recommendation-card"><div class="recommendation-number">${String(index + 1).padStart(2, "0")}</div><div><h3>${item.title}</h3><p><strong>Current Situation:</strong> ${item.situation}</p><p><strong>Recommended Action:</strong> ${item.action}</p><p><strong>Why It Matters:</strong> ${item.whyItMatters}</p></div><span class="priority ${item.className}">${item.priority}</span></article>`,
     )
     .join("");
 }
