@@ -142,6 +142,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .tax-summary-card { margin-top: 14px; padding: 25px; border-top: 4px solid var(--blue); }
 .tax-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 18px; background: var(--line); border: 1px solid var(--line); }
 .tax-summary-grid > div { display: grid; gap: 8px; padding: 15px; background: var(--surface); }
+.tax-summary-grid > div:last-child { grid-column: 1 / -1; }
 .tax-summary-item { position: relative; }
 .tax-summary-grid span { color: var(--ink-soft); font: 10px Arial, sans-serif; text-transform: uppercase; letter-spacing: .06em; }
 .tax-summary-grid strong { color: var(--blue); font-size: 20px; }
