@@ -67,18 +67,13 @@
                 <div class="panel-label score-label has-help">Retirement Health Score <button class="info-button metric-help-button" id="score-help-button" type="button" data-help-target="score-help" aria-expanded="false" aria-controls="score-help" aria-label="About the Retirement Health Score">i</button>
                   <div class="score-help metric-help" id="score-help" role="tooltip" data-help-button-id="score-help-button" hidden>
                     <strong>About this score</strong>
-                    <p>A simple planning gauge of how close your plan is to meeting retirement goals.</p>
-                    <ul>
-                      <li>Funding progress toward the amount your plan needs</li>
-                      <li>Annual savings and retirement timing</li>
-                      <li>Whether the plan stays funded through life expectancy</li>
-                    </ul>
-                    <p>It updates when assumptions change and is meant for planning, not a promise of future results.</p>
+                    <p>Your Readiness Score summarizes how well your projected assets, income, savings, and retirement spending support your plan through the selected planning period.</p>
                   </div>
                 </div>
                 <div class="score-row"><strong id="score-value">92</strong><span>/100</span></div>
                 <div class="score-track"><span id="score-bar"></span></div>
                 <div class="score-footer"><strong id="score-status">On Track</strong><span>Heuristic estimate, not a probability</span></div>
+                <p class="score-summary" id="score-summary" aria-live="polite">Score details update when the plan is calculated.</p>
               </article>
               <article class="panel timing-card">
                 <div class="panel-label">Retirement timing</div>
@@ -93,6 +88,29 @@
                 <div class="metric-line emphasis"><span id="funding-label">Funding gap</span><strong id="funding-gap">$0</strong></div>
               </article>
             </div>
+            <section class="score-factors panel" aria-label="Readiness score factors">
+              <div class="score-factor-heading">
+                <details class="score-factor-disclosure" id="score-factor-disclosure">
+                  <summary>What's impacting your score?</summary>
+                  <div class="score-factor-details" id="score-factor-details"></div>
+                </details>
+                <div class="score-factor-help has-help">
+                  <button class="info-button metric-help-button" id="score-factors-help-button" type="button" data-help-target="score-factors-help" aria-expanded="false" aria-controls="score-factors-help" aria-label="About score factors">i</button>
+                  <div class="metric-help" id="score-factors-help" role="tooltip" data-help-button-id="score-factors-help-button" hidden>
+                    <strong>Score factors</strong>
+                    <p>These factors explain the existing Readiness Score. They do not represent separate recommendations or additional calculations.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="score-factor-overview" id="score-factor-overview" aria-label="Score factor overview"></div>
+            </section>
+            <aside class="readiness-recommendations-cta" aria-labelledby="readiness-recommendations-title">
+              <div>
+                <h3 id="readiness-recommendations-title">Recommended Next Steps</h3>
+                <p id="readiness-recommendations-message">Review the highest-priority changes that may improve retirement sustainability.</p>
+              </div>
+              <button class="button" id="readiness-recommendations-button" type="button" data-page="recommendations">View Recommendations</button>
+            </aside>
             <div class="two-column-grid">
               <article class="panel spending-card">
                 <div class="panel-label metric-label-row has-help">Safe Spending<button class="info-button metric-help-button" id="safe-spending-help-button" type="button" data-help-target="safe-spending-help" aria-expanded="false" aria-controls="safe-spending-help" aria-label="About safe spending">i</button>
@@ -449,7 +467,14 @@
               <div><span class="eyebrow">TURN INSIGHT INTO ACTION</span><h2 id="recommendations-heading">Recommendations</h2><p>Small, prioritized actions based on your current plan.</p></div>
               <span class="status-pill" id="recommendation-count">0 actions</span>
             </div>
-            <div class="recommendation-list" id="recommendation-list"></div>
+            <section class="recommendation-group" aria-labelledby="top-recommendations-heading">
+              <h3 class="recommendation-group-heading" id="top-recommendations-heading">Top Recommendations</h3>
+              <div class="recommendation-list" id="recommendation-list"></div>
+            </section>
+            <details class="additional-opportunities" id="additional-opportunities" hidden>
+              <summary>Additional Opportunities <span id="additional-opportunities-count"></span></summary>
+              <div class="recommendation-list" id="additional-recommendation-list"></div>
+            </details>
           </section>
         </div>
         <footer class="app-footer">WealthMap is an educational retirement planning tool, not a tax, legal, or investment advisor. Consult qualified professionals before making important financial decisions.</footer>

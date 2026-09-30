@@ -59,6 +59,30 @@ test("recommendation cards explain the situation, action, and rationale", () => 
   assert.ok(appJs.includes("timelineIrmaaAge"));
 });
 
+test("Readiness explains the existing score with a progressive, accessible disclosure", () => {
+  assert.ok(indexHtml.includes('id="score-summary" aria-live="polite"'));
+  assert.ok(indexHtml.includes('id="score-factor-disclosure"'));
+  assert.ok(indexHtml.includes("What's impacting your score?"));
+  assert.ok(indexHtml.includes('id="score-factor-overview" aria-label="Score factor overview"'));
+  assert.ok(indexHtml.includes('id="score-factors-help-button"'));
+  assert.ok(indexHtml.includes("These factors explain the existing Readiness Score."));
+  assert.ok(indexHtml.includes("Your Readiness Score summarizes how well your projected assets, income, savings, and retirement spending support your plan through the selected planning period."));
+  assert.ok(appJs.includes("renderReadinessScoreFactors(null)"));
+  assert.ok(appJs.includes("statusOrder[left.status] - statusOrder[right.status]"));
+});
+
+test("Readiness links to recommendations and the page separates top and additional items", () => {
+  assert.ok(indexHtml.includes('id="readiness-recommendations-cta"') || indexHtml.includes('aria-labelledby="readiness-recommendations-title"'));
+  assert.ok(indexHtml.includes('id="readiness-recommendations-button"'));
+  assert.ok(indexHtml.includes('data-page="recommendations">View Recommendations</button>'));
+  assert.ok(indexHtml.includes("Top Recommendations"));
+  assert.ok(indexHtml.includes('<details class="additional-opportunities" id="additional-opportunities" hidden>'));
+  assert.ok(indexHtml.includes("Additional Opportunities"));
+  assert.ok(appJs.includes("items.slice(0, 3)"));
+  assert.ok(appJs.includes("items.slice(3)"));
+  assert.ok(appJs.includes("recommendedActionCount"));
+});
+
 test("required plan setup validation standby message is preserved", () => {
   assert.ok(
     indexHtml.includes(

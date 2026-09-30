@@ -2139,25 +2139,99 @@ function recommendations(metrics, profile) {
       whyItMatters:
         "Reducing future taxable income may help limit Medicare premium surcharges.",
     });
-  return items.sort((left, right) => right.severity - left.severity).slice(0, 3);
+  return items.sort((left, right) => right.severity - left.severity);
 }
 
-function renderRecommendations(metrics) {
-  const items = recommendations(metrics, workingProfile);
-  $("#recommendation-count").textContent =
-    `${items.length} action${items.length === 1 ? "" : "s"}`;
-  const list = $("#recommendation-list");
-  if (!items.length) {
-    list.innerHTML =
-      '<div class="panel" style="padding:24px"><strong>Your current inputs do not trigger a recommendation.</strong><p>Continue reviewing your assumptions as your plan changes.</p></div>';
-    return;
+function recommendationGroups(items) {
+  return { top: items.slice(0, 3), additional: items.slice(3) };
+}
+
+function readinessRecommendationsCallToAction(metrics, items, isValid) {
+  if (!isValid || !metrics) {
+    return {
+      title: "Complete Your Plan",
+      message:
+        "Additional information is needed before WealthMap can generate complete recommendations.",
+      action: "Review Missing Information",
+      destination: "profile",
+    };
   }
-  list.innerHTML = items
+
+  const recommendedActionCount = items.filter(
+    (item) => item.priority === "HIGH PRIORITY" || item.priority === "MEDIUM PRIORITY",
+  ).length;
+  if (recommendedActionCount > 0) {
+    return {
+      title: "Recommended Next Steps",
+      message: `Your plan has ${recommendedActionCount} recommended actions. Review the highest-priority changes that may improve retirement sustainability.`,
+      action: "View Recommendations",
+      destination: "recommendations",
+    };
+  }
+
+  return {
+    title: "Planning Opportunities",
+    message:
+      items.length > 0
+        ? "Your plan is currently in a strong position. Review additional opportunities that may improve tax flexibility or strengthen the plan."
+        : "No priority actions are currently flagged. Review Recommendations for any additional opportunities relevant to your plan.",
+    action: "View Recommendations",
+    destination: "recommendations",
+  };
+}
+
+function renderReadinessRecommendationsCallToAction(metrics, items) {
+  const callToAction = readinessRecommendationsCallToAction(
+    metrics,
+    items,
+    currentValidationState.isValid,
+  );
+  setText("#readiness-recommendations-title", callToAction.title);
+  setText("#readiness-recommendations-message", callToAction.message);
+  const button = $("#readiness-recommendations-button");
+  if (button) {
+    button.textContent = callToAction.action;
+    button.dataset.page = callToAction.destination;
+  }
+}
+
+function renderRecommendationCards(items, startingIndex = 0) {
+  return items
     .map(
       (item, index) =>
-        `<article class="recommendation-card"><div class="recommendation-number">${String(index + 1).padStart(2, "0")}</div><div><h3>${item.title}</h3><p><strong>Current Situation:</strong> ${item.currentSituation}</p><p><strong>Recommended Action:</strong> ${item.recommendedAction}</p><p><strong>Why It Matters:</strong> ${item.whyItMatters}</p></div><span class="priority ${item.className}">${item.priority}</span></article>`,
+        `<article class="recommendation-card"><div class="recommendation-number">${String(startingIndex + index + 1).padStart(2, "0")}</div><div><h3>${item.title}</h3><p><strong>Current Situation:</strong> ${item.currentSituation}</p><p><strong>Recommended Action:</strong> ${item.recommendedAction}</p><p><strong>Why It Matters:</strong> ${item.whyItMatters}</p></div><span class="priority ${item.className}">${item.priority}</span></article>`,
     )
     .join("");
+}
+
+function renderRecommendations(metrics, items = []) {
+  const count = $("#recommendation-count");
+  const list = $("#recommendation-list");
+  const additionalSection = $("#additional-opportunities");
+  const additionalList = $("#additional-recommendation-list");
+  if (!metrics) {
+    count.textContent = "Recommendations unavailable";
+    list.innerHTML =
+      '<div class="panel" style="padding:24px"><strong>Complete required Plan Setup information to generate recommendations.</strong></div>';
+    additionalSection.hidden = true;
+    return;
+  }
+  count.textContent = `${items.length} recommendation${items.length === 1 ? "" : "s"}`;
+  const groups = recommendationGroups(items);
+  list.innerHTML = groups.top.length
+    ? renderRecommendationCards(groups.top)
+    : '<div class="panel" style="padding:24px"><strong>Your current inputs do not trigger a priority recommendation.</strong><p>Review Plan Setup assumptions as your goals change.</p></div>';
+  additionalSection.hidden = groups.additional.length === 0;
+  if (groups.additional.length > 0) {
+    $("#additional-opportunities-count").textContent =
+      `${groups.additional.length}`;
+    additionalList.innerHTML = renderRecommendationCards(
+      groups.additional,
+      groups.top.length,
+    );
+  } else {
+    additionalList.replaceChildren();
+  }
 }
 
 function renderTimelineSummary(rows) {
@@ -2603,6 +2677,189 @@ function handleTimelineTableInput(event) {
   renderTimelineSummary(rows);
 }
 
+function readinessScoreFactors(metrics, profile) {
+  const factors = [];
+  const addFactor = (order, factor) => factors.push({ order, ...factor });
+
+  addFactor(1, {
+    name: "Portfolio Sustainability",
+    status: metrics.timelineDepletionAge != null ? "Critical" : "Positive",
+    currentResult:
+      metrics.timelineDepletionAge != null
+        ? `Assets projected to deplete at age ${metrics.timelineDepletionAge}`
+        : `No depletion projected through age ${profile.lifeExpectancy}`,
+    explanation:
+      metrics.timelineDepletionAge != null
+        ? "Projected depletion applies the score's sustainability penalty because assets reach $0 before life expectancy."
+        : "No depletion is projected through life expectancy, so the score has no portfolio-sustainability penalty.",
+  });
+
+  if (Number.isFinite(metrics.fundingDelta)) {
+    const hasFundingGap = metrics.fundingDelta > 0;
+    addFactor(2, {
+      name: "Funding Position",
+      status: hasFundingGap
+        ? metrics.status === "Major Shortfall"
+          ? "Critical"
+          : "Needs Attention"
+        : "Positive",
+      currentResult: hasFundingGap
+        ? `${money(metrics.fundingDelta)} funding gap`
+        : metrics.fundingDelta < 0
+          ? `${money(Math.abs(metrics.fundingDelta))} projected surplus`
+          : "No funding gap; projected assets meet required assets",
+      explanation: hasFundingGap
+        ? "The projected gap lowers the funding-progress component of your Readiness Score."
+        : "Projected assets meet or exceed the required amount, supporting the funding-progress component of your Readiness Score.",
+    });
+  } else if (metrics.fundingDelta === Infinity) {
+    addFactor(2, {
+      name: "Funding Position",
+      status: "Critical",
+      currentResult: "Required assets exceed the modeled range",
+      explanation:
+        "The funding-progress component is at its minimum because the model cannot find a sustainable required-asset level within its calculation range.",
+    });
+  } else {
+    addFactor(2, {
+      name: "Funding Position",
+      status: "Not Available",
+      currentResult: "Funding estimate unavailable",
+      explanation: "A valid funding estimate is needed to explain this score factor.",
+    });
+  }
+
+  if (
+    Number.isFinite(profile.retirementAnnualSpendingGoal) &&
+    Number.isFinite(metrics.safeSpending)
+  ) {
+    const aboveSafeSpending =
+      profile.retirementAnnualSpendingGoal > metrics.safeSpending;
+    addFactor(3, {
+      name: "Retirement Spending",
+      status: aboveSafeSpending ? "Needs Attention" : "Positive",
+      currentResult: `${money(profile.retirementAnnualSpendingGoal)} goal compared with ${money(metrics.safeSpending)} estimated safe spending`,
+      explanation: aboveSafeSpending
+        ? "Your spending goal is above the timeline's estimated sustainable level. The goal feeds the required-assets estimate used in funding progress; safe spending is context, not a separate score input."
+        : "Your goal is within the timeline's estimated sustainable level. The goal feeds the required-assets estimate used in funding progress; safe spending is context, not a separate score input.",
+    });
+  } else {
+    addFactor(3, {
+      name: "Retirement Spending",
+      status: "Not Available",
+      currentResult: "Spending comparison unavailable",
+      explanation: "Valid spending and safe-spending estimates are needed for this comparison.",
+    });
+  }
+
+  const expectedAge = metrics.expectedRetirementAge;
+  const timingStatus =
+    expectedAge == null
+      ? "Critical"
+      : expectedAge <= profile.targetRetirementAge
+        ? "Positive"
+        : "Needs Attention";
+  addFactor(4, {
+    name: "Retirement Income Coverage & Timing",
+    status: timingStatus,
+    currentResult:
+      expectedAge == null
+        ? "Projected assets do not meet the modeled retirement need by life expectancy"
+        : `Expected retirement age ${expectedAge}; target age ${profile.targetRetirementAge}`,
+    explanation:
+      expectedAge == null
+        ? "The timing component is zero because projected assets do not reach the modeled retirement need within the planning period."
+        : expectedAge <= profile.targetRetirementAge
+          ? "Projected resources, including modeled retirement income, meet the retirement need by the target age and support the timing component."
+          : "The timing component is lower because projected resources reach the modeled retirement need after the target age.",
+  });
+
+  if (metrics.totalIncome > 0 && Number.isFinite(metrics.savingsRate)) {
+    const meetsSavingsTarget = metrics.savingsRate >= 0.2;
+    addFactor(5, {
+      name: "Savings Rate",
+      status: meetsSavingsTarget ? "Positive" : "Needs Attention",
+      currentResult: `${percent(metrics.savingsRate)}; target ${percent(0.2)}`,
+      explanation: meetsSavingsTarget
+        ? "Your savings rate meets the 20% benchmark used by the savings component of your Readiness Score."
+        : "Your savings rate is below the 20% benchmark, reducing the savings component of your Readiness Score.",
+    });
+  } else {
+    addFactor(5, {
+      name: "Savings Rate",
+      status: "Not Available",
+      currentResult: "Savings-rate comparison unavailable",
+      explanation: "Annual income is needed to evaluate the savings-rate component.",
+    });
+  }
+
+  const statusOrder = {
+    Critical: 0,
+    "Needs Attention": 1,
+    Positive: 2,
+    "Not Available": 3,
+  };
+  return factors.sort(
+    (left, right) =>
+      statusOrder[left.status] - statusOrder[right.status] ||
+      left.order - right.order,
+  );
+}
+
+function readinessScoreSummary(metrics, factors) {
+  if (!metrics)
+    return "Score factors are unavailable while required planning inputs need correction.";
+
+  const critical = factors.filter((factor) => factor.status === "Critical");
+  if (critical.length)
+    return `Your plan has a critical readiness concern: ${critical[0].name}. Review the factors below to see how it relates to your score.`;
+
+  const needsAttention = factors.filter(
+    (factor) => factor.status === "Needs Attention",
+  );
+  if (metrics.status === "Major Shortfall")
+    return "Your Readiness Score is low because the combined funding, savings, and retirement-timing components indicate a major shortfall.";
+  if (
+    metrics.status === "On Track" &&
+    needsAttention.length === 0 &&
+    factors.every((factor) => factor.status === "Positive")
+  )
+    return "Your plan is currently supported by sustainable spending, sufficient projected assets, and no projected funding gap.";
+  if (needsAttention.length)
+    return `Your plan shows progress, but ${needsAttention.map((factor) => factor.name.toLowerCase()).join(", ")} may need attention to improve retirement sustainability.`;
+  return "Your score reflects the funding, savings, and timing factors shown below.";
+}
+
+function renderReadinessScoreFactors(metrics) {
+  const overview = $("#score-factor-overview");
+  const details = $("#score-factor-details");
+  if (!overview || !details) return;
+
+  if (!metrics) {
+    setText("#score-summary", readinessScoreSummary(null, []));
+    overview.innerHTML =
+      '<p class="score-factor-unavailable">Not Available: Correct required planning inputs to view score factors.</p>';
+    details.replaceChildren();
+    return;
+  }
+
+  const factors = readinessScoreFactors(metrics, workingProfile);
+  setText("#score-summary", readinessScoreSummary(metrics, factors));
+  overview.innerHTML = factors
+    .slice(0, 3)
+    .map(
+      (factor) =>
+        `<span class="score-factor-chip" data-status="${factor.status}"><strong>${factor.status}</strong><span>${factor.name}</span></span>`,
+    )
+    .join("");
+  details.innerHTML = factors
+    .map(
+      (factor) =>
+        `<article class="score-factor-row" data-status="${factor.status}"><div class="score-factor-title"><h3>${factor.name}</h3><span class="score-factor-status">${factor.status}</span></div><p><strong>Current Result:</strong> ${factor.currentResult}</p><p>${factor.explanation}</p></article>`,
+    )
+    .join("");
+}
+
 function renderMetrics() {
   const validation =
     typeof PlanSetupValidation !== "undefined"
@@ -2612,6 +2869,9 @@ function renderMetrics() {
 
   if (!validation.isValid) {
     renderValidationMessages(validation);
+    renderReadinessScoreFactors(null);
+    renderReadinessRecommendationsCallToAction(null, []);
+    renderRecommendations(null);
     return lastValidProjection;
   }
 
@@ -2625,6 +2885,7 @@ function renderMetrics() {
   );
   setText("#score-value", metrics.score);
   setWidth("#score-bar", `${metrics.score}%`);
+  renderReadinessScoreFactors(metrics);
   setText("#score-status", metrics.status);
   setText("#readiness-status", metrics.status);
   const readinessStatus = $("#readiness-status");
@@ -2693,7 +2954,9 @@ function renderMetrics() {
     );
   }
   updateSocialSecurityBenefitFieldVisibility();
-  renderRecommendations(metrics);
+  const currentRecommendations = recommendations(metrics, workingProfile);
+  renderReadinessRecommendationsCallToAction(metrics, currentRecommendations);
+  renderRecommendations(metrics, currentRecommendations);
   renderSocialSecuritySchedule(metrics.socialSecurityPlan);
   renderTimeline();
   return metrics;
@@ -2747,7 +3010,11 @@ function updateWorkingValue(field, rawValue, type) {
       : { blockingErrors: [], warnings: [], isValid: true };
 
   if (!validation.isValid) {
+    currentValidationState = validation;
     renderValidationMessages(validation);
+    renderReadinessScoreFactors(null);
+    renderReadinessRecommendationsCallToAction(null, []);
+    renderRecommendations(null);
     return;
   }
 
@@ -2889,6 +3156,9 @@ function init() {
   bindFieldListeners();
   $$(".nav-item").forEach((item) =>
     item.addEventListener("click", () => showPage(item.dataset.page)),
+  );
+  $("#readiness-recommendations-button").addEventListener("click", (event) =>
+    showPage(event.currentTarget.dataset.page),
   );
   window.addEventListener("hashchange", syncPageFromHash);
   window.addEventListener("popstate", syncPageFromHash);

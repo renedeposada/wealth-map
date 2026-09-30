@@ -10,15 +10,21 @@ function loadRecommendationModel() {
   const sandbox = { console, Math, Number, Intl, Object, Array, JSON, Date };
   vm.createContext(sandbox);
   vm.runInContext(
-    `${dataSource}\n${appSource}\nvar __wealthMap = { recommendations, timelineSummary, calculate, cloneSampleProfile };`,
+    `${dataSource}\n${appSource}\nvar __wealthMap = { recommendations, recommendationGroups, readinessRecommendationsCallToAction, timelineSummary, calculate, cloneSampleProfile };`,
     sandbox,
     { filename: "wealth-map-recommendations.js" },
   );
   return sandbox.__wealthMap;
 }
 
-const { recommendations, timelineSummary, calculate, cloneSampleProfile } =
-  loadRecommendationModel();
+const {
+  recommendations,
+  recommendationGroups,
+  readinessRecommendationsCallToAction,
+  timelineSummary,
+  calculate,
+  cloneSampleProfile,
+} = loadRecommendationModel();
 
 function baseMetrics(overrides = {}) {
   return {
@@ -149,9 +155,10 @@ test("Roth, RMD, savings, diversification, and IRMAA recommendations follow the 
       "Consider Roth Conversions",
       "Increase annual savings",
       "Review tax diversification",
+      "Manage Future Medicare Surcharges",
     ],
   );
-  assert.equal(items.length, 3);
+  assert.equal(items.length, 4);
 
   const lowerPriorityItems = recommendations(
     baseMetrics({ timelineIrmaaAge: 65 }),
@@ -210,8 +217,84 @@ test("depletion, funding gap, and spending shortfall remain ahead of Roth recomm
       "Address projected portfolio depletion",
       "Address the projected funding gap",
       "Align retirement spending with the estimate",
+      "Consider Roth Conversions",
+      "Review tax diversification",
     ],
   );
+});
+
+test("recommendation groups keep the top three and retain every remaining item", () => {
+  const items = recommendations(
+    baseMetrics({
+      timelineDepletionAge: 80,
+      fundingDelta: 100000,
+      safeSpending: 40000,
+      savingsRate: 0.1,
+      employeeSavings: 10000,
+      projectedRothConversion: 12000,
+      firstRothConversionAge: 60,
+      firstRothConversionAmount: 12000,
+      timelineIrmaaAge: 65,
+    }),
+    baseProfile({
+      retirementAnnualSpendingGoal: 50000,
+      rothConversionStrategy: "auto",
+    }),
+  );
+  const groups = recommendationGroups(items);
+
+  assert.equal(items.length, 7);
+  assert.equal(groups.top.length, 3);
+  assert.equal(groups.additional.length, 4);
+  assert.deepEqual(
+    Array.from(groups.top, (item) => item.severity),
+    [100, 90, 80],
+  );
+  assert.equal(groups.top.length + groups.additional.length, items.length);
+});
+
+test("Readiness CTA counts all high and medium recommendations, not only visible cards", () => {
+  const profile = baseProfile({ rothConversionStrategy: "auto" });
+  const metrics = baseMetrics({
+    timelineDepletionAge: 80,
+    fundingDelta: 100000,
+    safeSpending: 40000,
+    savingsRate: 0.1,
+    employeeSavings: 10000,
+    projectedRothConversion: 12000,
+    firstRothConversionAge: 60,
+    firstRothConversionAmount: 12000,
+    timelineIrmaaAge: 65,
+  });
+  const items = recommendations(metrics, profile);
+  const cta = readinessRecommendationsCallToAction(metrics, items, true);
+
+  assert.equal(cta.title, "Recommended Next Steps");
+  assert.match(cta.message, /has 5 recommended actions/);
+  assert.equal(cta.action, "View Recommendations");
+  assert.equal(cta.destination, "recommendations");
+});
+
+test("Readiness CTA shows planning opportunities or missing-plan guidance when appropriate", () => {
+  const metrics = baseMetrics({ timelineIrmaaAge: 65 });
+  const infoOnlyRecommendations = recommendations(metrics, baseProfile());
+  const opportunitiesCta = readinessRecommendationsCallToAction(
+    metrics,
+    infoOnlyRecommendations,
+    true,
+  );
+  assert.equal(opportunitiesCta.title, "Planning Opportunities");
+  assert.match(opportunitiesCta.message, /strong position/i);
+  assert.equal(opportunitiesCta.destination, "recommendations");
+
+  const missingPlanCta = readinessRecommendationsCallToAction(
+    null,
+    [],
+    false,
+  );
+  assert.equal(missingPlanCta.title, "Complete Your Plan");
+  assert.equal(missingPlanCta.action, "Review Missing Information");
+  assert.equal(missingPlanCta.destination, "profile");
 });
 
 test("recommendation severity and badges match the priority mapping", () => {
