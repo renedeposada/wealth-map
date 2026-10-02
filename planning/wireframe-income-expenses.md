@@ -6,17 +6,17 @@
 | Current cash flow and retirement spending goal                                |
 +--------------------------------------------------------------------------------+
 | INCOME                                                                         |
-| Annual salary                                      [ $150,000 ]                |
+| Annual salary                                      [ $180,000 ]                |
 | Other annual income                                [       $0 ]                |
-| Total annual income                                  $150,000                  |
+| Total annual income                                  $180,000                  |
 |                                                                                |
 | SAVINGS AND SPENDING                                                          |
-| Annual savings                                      [  $30,000 ]                |
-| Current annual expenses                             [  $85,000 ]                |
-| Retirement spending goal                            [  $75,000 ]                |
+| Annual savings                                      [  $19,152 ]                |
+| Current annual expenses                             [ $140,000 ]                |
+| Retirement spending goal                            [ $100,000 ]                |
 |                                                                                |
-| Annual surplus                                        $65,000                  |
-| Savings rate                                             20.0%                 |
+| Annual surplus                                             $0                  |
+| Savings rate                                             10.6%                 |
 |                                                                                |
 | [Changes recalculate automatically]                                           |
 +--------------------------------------------------------------------------------+

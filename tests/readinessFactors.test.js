@@ -57,11 +57,11 @@ test("score factors describe only existing score drivers and relevant spending c
   assert.deepEqual(
     Array.from(factors, (factor) => factor.name),
     [
+      "Savings Rate",
       "Portfolio Sustainability",
       "Funding Position",
       "Retirement Spending",
       "Retirement Income Coverage & Timing",
-      "Savings Rate",
     ],
   );
   assert.ok(factors.every((factor) => factor.status));
@@ -75,7 +75,10 @@ test("score factors describe only existing score drivers and relevant spending c
         ),
     ),
   );
-  assert.match(factors[2].explanation, /not a separate score input/);
+  assert.match(
+    factors.find((factor) => factor.name === "Retirement Spending").explanation,
+    /not a separate score input/,
+  );
 });
 
 test("critical factors sort first while preserving factor order within each status", () => {

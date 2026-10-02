@@ -73,16 +73,16 @@ test("reset restores automatic estimation", () => {
   assert.equal(reset.socialSecurityBenefitMode, "auto");
   const plan = resolveSocialSecurityPlan(reset);
   assert.equal(plan.benefitMode, "auto");
-  assert.equal(plan.fraBenefit, 52500); // 35% of $150k rounded to $500
+  assert.equal(plan.fraBenefit, 63000); // 35% of $180k rounded to $500
 });
 
 test("the estimate appears instead of $0 for new users", () => {
   const profile = cloneSampleProfile();
   const plan = resolveSocialSecurityPlan(profile);
   assert.ok(plan.fraBenefit > 0);
-  assert.equal(plan.fraBenefit, 52500);
+  assert.equal(plan.fraBenefit, 63000);
   const metrics = calculate(profile);
-  assert.equal(metrics.socialSecurityPlan.fraBenefit, 52500);
+  assert.equal(metrics.socialSecurityPlan.fraBenefit, 63000);
 });
 
 test("the estimate updates when salary changes and never produces a negative benefit", () => {
@@ -138,7 +138,7 @@ test("manual values are preserved when switching modes", () => {
   profile.socialSecurityBenefitMode = "auto";
   const planAuto = resolveSocialSecurityPlan(profile);
   assert.equal(planAuto.benefitMode, "auto");
-  assert.equal(planAuto.fraBenefit, 52500);
+  assert.equal(planAuto.fraBenefit, 63000);
   assert.equal(profile.socialSecurityAnnualBenefit, 28500); // preserved
 
   // User switches back to manual
@@ -165,7 +165,7 @@ test("claim-age adjustments work with both benefit modes", () => {
     socialSecurityBenefitMode: "auto",
     socialSecurityClaimAge: 70,
   });
-  assert.equal(auto67.annualBenefit, 52500);
+  assert.equal(auto67.annualBenefit, 63000);
   assert.ok(auto62.annualBenefit < auto67.annualBenefit);
   assert.ok(auto70.annualBenefit > auto67.annualBenefit);
 

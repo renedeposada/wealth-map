@@ -8,18 +8,18 @@
 | INVESTABLE ASSETS                                                              |
 |                                                                                |
 | Account                  Tax treatment                    Balance             |
-| Taxable brokerage        Taxable                     [ $180,000 ]             |
-| 401(k)                   Tax-deferred                [ $420,000 ]             |
-| Traditional IRA          Tax-deferred                [  $90,000 ]             |
-| Roth IRA                 Tax-free qualified          [  $80,000 ]             |
-| Cash                     Liquid                       [  $50,000 ]             |
+| Taxable brokerage        Taxable                     [  $40,000 ]             |
+| 401(k)                   Tax-deferred                [ $275,000 ]             |
+| Traditional IRA          Tax-deferred                [  $75,000 ]             |
+| Roth IRA                 Tax-free qualified          [  $25,000 ]             |
+| Cash                     Liquid                       [  $20,000 ]             |
 |                                                                                |
-| Total financial assets                                      $820,000           |
+| Total financial assets                                      $435,000           |
 |                                                                                |
 | OTHER ASSETS                                                                   |
-| Real estate                                             [ $350,000 ]           |
+| Real estate                                             [ $450,000 ]           |
 |                                                                                |
-| Total assets                                             $1,170,000           |
+| Total assets                                               $885,000           |
 |                                                                                |
 | [Reset sample data]                                                            |
 +--------------------------------------------------------------------------------+

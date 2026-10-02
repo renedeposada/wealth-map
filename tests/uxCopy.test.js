@@ -8,6 +8,7 @@ const indexHtml = fs.readFileSync(
   "utf8",
 );
 const appJs = fs.readFileSync(path.join(__dirname, "../app.js"), "utf8");
+const stylesCss = fs.readFileSync(path.join(__dirname, "../styles.css"), "utf8");
 
 const GLOBAL_DISCLAIMER =
   "WealthMap is an educational retirement planning tool, not a tax, legal, or investment advisor. Consult qualified professionals before making important financial decisions.";
@@ -59,6 +60,13 @@ test("recommendation cards explain the situation, action, and rationale", () => 
   assert.ok(appJs.includes("timelineIrmaaAge"));
 });
 
+test("expected annual return accepts hundredth-percent precision", () => {
+  assert.match(
+    appJs,
+    /key === "expectedAnnualReturn"\s*\?\s*"0\.01"\s*:\s*"0\.1"/,
+  );
+});
+
 test("Readiness explains the existing score with a progressive, accessible disclosure", () => {
   assert.ok(indexHtml.includes('id="score-summary" aria-live="polite"'));
   assert.ok(indexHtml.includes('id="score-factor-disclosure"'));
@@ -80,7 +88,21 @@ test("Readiness links to recommendations and the page separates top and addition
   assert.ok(indexHtml.includes("Additional Opportunities"));
   assert.ok(appJs.includes("items.slice(0, 3)"));
   assert.ok(appJs.includes("items.slice(3)"));
-  assert.ok(appJs.includes("recommendedActionCount"));
+  assert.ok(appJs.includes("Your plan has ${items.length} recommendation"));
+  assert.ok(indexHtml.includes('aria-controls="additional-recommendation-list" aria-expanded="false"'));
+  assert.ok(appJs.includes('setAttribute("aria-expanded", String(event.currentTarget.open))'));
+});
+
+test("Readiness exports a concise preview using existing plan outputs", () => {
+  assert.ok(indexHtml.includes('id="export-plan-pdf"'));
+  assert.ok(indexHtml.includes('id="plan-report-dialog"'));
+  assert.ok(indexHtml.includes('id="print-plan-report"'));
+  assert.ok(appJs.includes("recommendationGroups(currentRecommendationItems).top"));
+  assert.ok(appJs.includes("buildTimelineMilestones("));
+  assert.ok(appJs.includes("No projected asset depletion identified."));
+  assert.ok(appJs.includes("This report is based on user-provided assumptions and planning inputs."));
+  assert.match(stylesCss, /@media print\s*\{/);
+  assert.ok(stylesCss.includes(".report-page:last-child"));
 });
 
 test("required plan setup validation standby message is preserved", () => {

@@ -16,6 +16,10 @@ let currentValidationState = {
   warnings: [],
   isValid: true,
 };
+let currentRecommendationItems = [];
+let currentTimelineRows = [];
+let currentTimelineProfile = null;
+let currentSocialSecurityPlan = null;
 
 const pageTitles = {
   readiness: ["READINESS", "Retirement Readiness"],
@@ -1084,11 +1088,6 @@ function buildTimelineRows(profile) {
 
       // RMD is based on the prior year-end pre-tax balance, before this year's growth.
       rmd = requiredMinimumDistribution(profile, preTax, age);
-      const irmaa =
-        taxableSocialSecurity + rmd > profile.irmaaIncomeThreshold
-          ? profile.irmaaAnnualSurcharge
-          : 0;
-
       // Income tax attributable to the RMD, stacked marginally on top of taxable Social Security.
       rowFederalTax =
         progressiveFederalTax(profile, taxableSocialSecurity + rmd) -
@@ -1134,6 +1133,11 @@ function buildTimelineRows(profile) {
       }
       rowConversion = conversion;
       rowConversionTax = conversionTax;
+      const irmaa =
+        taxableSocialSecurity + rmd + conversion >
+        profile.irmaaIncomeThreshold
+          ? profile.irmaaAnnualSurcharge
+          : 0;
 
       const spendingGoal = expenses;
       const naturalRemaining = Math.max(
@@ -1800,7 +1804,13 @@ function createField(config) {
       control.min = type === "percent" ? "0" : "0";
       if (type === "percent") control.max = "100";
       control.step =
-        type === "percent" ? "0.1" : type === "currency" ? "100" : "1";
+        type === "percent"
+          ? key === "expectedAnnualReturn"
+            ? "0.01"
+            : "0.1"
+          : type === "currency"
+            ? "100"
+            : "1";
       control.inputMode = "decimal";
     }
     if (key === "socialSecurityClaimAge") {
@@ -2146,6 +2156,14 @@ function recommendationGroups(items) {
   return { top: items.slice(0, 3), additional: items.slice(3) };
 }
 
+function recommendationSectionHeading(items) {
+  return items.some(
+    (item) => item.priority === "HIGH PRIORITY" || item.priority === "MEDIUM PRIORITY",
+  )
+    ? "Top Recommendations"
+    : "Planning Opportunities";
+}
+
 function readinessRecommendationsCallToAction(metrics, items, isValid) {
   if (!isValid || !metrics) {
     return {
@@ -2157,13 +2175,13 @@ function readinessRecommendationsCallToAction(metrics, items, isValid) {
     };
   }
 
-  const recommendedActionCount = items.filter(
+  const hasPriorityRecommendation = items.some(
     (item) => item.priority === "HIGH PRIORITY" || item.priority === "MEDIUM PRIORITY",
-  ).length;
-  if (recommendedActionCount > 0) {
+  );
+  if (hasPriorityRecommendation) {
     return {
       title: "Recommended Next Steps",
-      message: `Your plan has ${recommendedActionCount} recommended actions. Review the highest-priority changes that may improve retirement sustainability.`,
+      message: `Your plan has ${items.length} recommendation${items.length === 1 ? "" : "s"}. Review the highest-priority changes that may improve retirement sustainability.`,
       action: "View Recommendations",
       destination: "recommendations",
     };
@@ -2173,7 +2191,7 @@ function readinessRecommendationsCallToAction(metrics, items, isValid) {
     title: "Planning Opportunities",
     message:
       items.length > 0
-        ? "Your plan is currently in a strong position. Review additional opportunities that may improve tax flexibility or strengthen the plan."
+        ? `Your plan is currently in a strong position, with ${items.length} informational planning opportunit${items.length === 1 ? "y" : "ies"} to review for tax flexibility or additional planning context.`
         : "No priority actions are currently flagged. Review Recommendations for any additional opportunities relevant to your plan.",
     action: "View Recommendations",
     destination: "recommendations",
@@ -2207,29 +2225,40 @@ function renderRecommendationCards(items, startingIndex = 0) {
 function renderRecommendations(metrics, items = []) {
   const count = $("#recommendation-count");
   const list = $("#recommendation-list");
+  const heading = $("#top-recommendations-heading");
   const additionalSection = $("#additional-opportunities");
   const additionalList = $("#additional-recommendation-list");
+  const additionalSummary = additionalSection.querySelector("summary");
   if (!metrics) {
     count.textContent = "Recommendations unavailable";
     list.innerHTML =
       '<div class="panel" style="padding:24px"><strong>Complete required Plan Setup information to generate recommendations.</strong></div>';
     additionalSection.hidden = true;
+    additionalSection.open = false;
+    additionalSummary.setAttribute("aria-expanded", "false");
+    additionalList.replaceChildren();
+    heading.hidden = true;
     return;
   }
   count.textContent = `${items.length} recommendation${items.length === 1 ? "" : "s"}`;
   const groups = recommendationGroups(items);
+  heading.textContent = recommendationSectionHeading(items);
+  heading.hidden = items.length === 0;
   list.innerHTML = groups.top.length
     ? renderRecommendationCards(groups.top)
-    : '<div class="panel" style="padding:24px"><strong>Your current inputs do not trigger a priority recommendation.</strong><p>Review Plan Setup assumptions as your goals change.</p></div>';
+    : '<div class="panel" style="padding:24px"><strong>No major recommendations were identified for your current plan.</strong><p>Continue reviewing your assumptions and update your plan as your financial situation changes.</p></div>';
   additionalSection.hidden = groups.additional.length === 0;
   if (groups.additional.length > 0) {
     $("#additional-opportunities-count").textContent =
-      `${groups.additional.length}`;
+      `(${groups.additional.length})`;
     additionalList.innerHTML = renderRecommendationCards(
       groups.additional,
       groups.top.length,
     );
   } else {
+    additionalSection.open = false;
+    additionalSummary.setAttribute("aria-expanded", "false");
+    $("#additional-opportunities-count").textContent = "";
     additionalList.replaceChildren();
   }
 }
@@ -2256,6 +2285,8 @@ const MILESTONE_DESCRIPTIONS = {
     "The final modeled year for Roth conversions under the current strategy.",
   firstRmd:
     "Required Minimum Distributions begin from eligible tax-deferred retirement accounts.",
+  rmdStartAge:
+    "This is the configured age when Required Minimum Distributions begin. A distribution is modeled only if tax-deferred assets remain.",
   firstIrmaa:
     "The first projected year in which Medicare IRMAA surcharges apply.",
   withdrawalShift:
@@ -2266,7 +2297,7 @@ const MILESTONE_DESCRIPTIONS = {
     "The portfolio is projected to reach $0 at this age under current assumptions.",
 };
 
-function buildTimelineMilestones(rows, profile, ssPlan) {
+function buildTimelineMilestones(rows, profile, ssPlan, limit = 8) {
   if (!rows.length) return [];
 
   const summary = timelineSummary(rows, profile);
@@ -2346,6 +2377,20 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
       "currency",
       "firstRmd",
     );
+  } else {
+    const rmdStartRow = rows.find(
+      (row) => row.isRetired && row.age === profile.rmdStartAge,
+    );
+    if (rmdStartRow) {
+      addMilestone(
+        rmdStartRow.age,
+        "RMD start age",
+        null,
+        null,
+        null,
+        "rmdStartAge",
+      );
+    }
   }
 
   const firstIrmaaRow = rows.find((row) => row.isRetired && row.irmaa > 0);
@@ -2406,7 +2451,7 @@ function buildTimelineMilestones(rows, profile, ssPlan) {
       tooltip: milestone.descriptions.join(" "),
     }))
     .sort((a, b) => a.age - b.age)
-    .slice(0, 8);
+    .slice(0, limit);
 }
 
 function renderTimelineMilestones(rows, profile, ssPlan) {
@@ -2649,12 +2694,174 @@ function renderStrategySummary(ssPlan, profile, summary) {
 function renderTimeline() {
   const { effectiveProfile, ssPlan } = resolveEffectiveProfile(workingProfile);
   const rows = buildTimelineRows(effectiveProfile);
+  currentTimelineRows = rows;
+  currentTimelineProfile = effectiveProfile;
+  currentSocialSecurityPlan = ssPlan;
   const summary = timelineSummary(rows, effectiveProfile);
   renderStrategySummary(ssPlan, effectiveProfile, summary);
   renderTimelineTable(rows);
   renderTimelineMilestones(rows, effectiveProfile, ssPlan);
   renderTimelineSummary(rows);
   return rows;
+}
+
+function escapeReportHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function reportMetric(label, value) {
+  return `<div class="report-metric"><span>${escapeReportHtml(label)}</span><strong>${escapeReportHtml(value)}</strong></div>`;
+}
+
+function planReportMarkup() {
+  const metrics = lastValidProjection;
+  const profile = workingProfile;
+  const generationDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const hasDepletion = metrics.timelineDepletionAge != null;
+  const summary =
+    metrics.status === "On Track" && !hasDepletion
+      ? "Your plan is projected to remain sustainable throughout the planning period with no projected funding shortfall."
+      : metrics.status === "Major Shortfall" || hasDepletion
+        ? "Your plan contains significant retirement sustainability challenges that should be reviewed."
+        : "Your plan shows one or more areas that may benefit from additional savings, retirement-spending adjustments, or tax-planning improvements.";
+  const fundingLabel = metrics.fundingDelta > 0 ? "Funding gap" : "Funding surplus";
+  const fundingValue = money(Math.abs(metrics.fundingDelta));
+  const topRecommendations = recommendationGroups(currentRecommendationItems).top;
+  const recommendationMarkup = topRecommendations.length
+    ? topRecommendations
+        .map(
+          (item) => `<article class="report-recommendation">
+            <span class="report-priority">${escapeReportHtml(item.priority)}</span>
+            <h3>${escapeReportHtml(item.title)}</h3>
+            <p><strong>Current Situation</strong>${escapeReportHtml(item.currentSituation)}</p>
+            <p><strong>Recommended Action</strong>${escapeReportHtml(item.recommendedAction)}</p>
+            <p><strong>Why It Matters</strong>${escapeReportHtml(item.whyItMatters)}</p>
+          </article>`,
+        )
+        .join("")
+    : '<p class="report-empty">No top recommendations are currently identified for this plan.</p>';
+  const assetGroups = [
+    ["Tax-deferred assets", money(numberValue(profile.assets.fourOhOneK) + numberValue(profile.assets.traditionalIra))],
+    ["Roth assets", money(numberValue(profile.assets.rothIra))],
+    ["Taxable assets", money(numberValue(profile.assets.brokerage))],
+    ["Cash assets", money(numberValue(profile.assets.cash))],
+    ["Total financial assets", money(metrics.financialAssets)],
+  ];
+  const assetRows = assetGroups
+    .map(([label, value]) => `<tr><th scope="row">${escapeReportHtml(label)}</th><td>${escapeReportHtml(value)}</td></tr>`)
+    .join("");
+  const reportMilestoneLabels = new Set([
+    "Retirement begins",
+    "Social Security begins",
+    "Roth conversions begin",
+    "Roth conversions end",
+    "First RMD",
+    "RMD start age",
+    "First IRMAA year",
+    "Portfolio depletion",
+  ]);
+  const milestones = currentTimelineRows.length && currentTimelineProfile
+    ? buildTimelineMilestones(
+        currentTimelineRows,
+        currentTimelineProfile,
+        currentSocialSecurityPlan,
+        Number.POSITIVE_INFINITY,
+      ).flatMap((milestone) =>
+        milestone.labels
+          .filter((label) => reportMilestoneLabels.has(label))
+          .map((label) => ({ age: milestone.age, label })),
+      )
+    : [];
+  const milestoneMarkup = milestones.length
+    ? milestones
+        .map((milestone) => `<li><span>Age ${escapeReportHtml(milestone.age)}</span><strong>${escapeReportHtml(milestone.label)}</strong></li>`)
+        .join("")
+    : '<li class="report-empty">No additional major milestones are available for the current plan.</li>';
+  const depletionValue = hasDepletion
+    ? `Age ${metrics.timelineDepletionAge}`
+    : "No projected asset depletion identified.";
+  const reportName = profile.name?.trim() || "Personal retirement plan";
+
+  return `<section class="report-page report-cover-page">
+      <header class="report-brand"><span class="report-brand-mark">WM</span><span>WEALTHMAP</span><time>${escapeReportHtml(generationDate)}</time></header>
+      <p class="report-kicker">RETIREMENT PLAN SUMMARY</p>
+      <h1>WealthMap Retirement Plan Summary</h1>
+      <p class="report-prepared-for">Prepared for ${escapeReportHtml(reportName)}</p>
+      <p class="report-executive-summary">${escapeReportHtml(summary)}</p>
+      <div class="report-cover-stats">
+        ${reportMetric("Readiness Score", `${metrics.score} / 100`)}
+        ${reportMetric("Readiness Status", metrics.status)}
+        ${reportMetric("Current Age", profile.currentAge)}
+        ${reportMetric("Planned Retirement Age", profile.targetRetirementAge)}
+      </div>
+      <section class="report-section">
+        <p class="report-kicker">RETIREMENT READINESS</p>
+        <h2>Readiness Summary</h2>
+        <div class="report-metric-grid">
+          ${reportMetric("Readiness Score", `${metrics.score} / 100`)}
+          ${reportMetric("Readiness Status", metrics.status)}
+          ${reportMetric("Estimated Safe Spending", money(metrics.safeSpending))}
+          ${reportMetric("Retirement Spending Goal", money(profile.retirementAnnualSpendingGoal))}
+          ${reportMetric(fundingLabel, fundingValue)}
+          ${reportMetric("Projected Portfolio Depletion Age", depletionValue)}
+        </div>
+      </section>
+      <p class="report-score-note">The Retirement Health Score is a heuristic estimate, not a probability.</p>
+    </section>
+    <section class="report-page">
+      <header class="report-page-heading"><p class="report-kicker">PRIORITIZED NEXT STEPS</p><h2>Top Recommendations</h2><p>Based on the current plan inputs and WealthMap's existing recommendation rules.</p></header>
+      <div class="report-recommendations">${recommendationMarkup}</div>
+    </section>
+    <section class="report-page">
+      <header class="report-page-heading"><p class="report-kicker">CURRENT PLAN</p><h2>Plan Snapshot</h2></header>
+      <section class="report-section report-snapshot-section">
+        <h3>Plan Setup</h3>
+        <div class="report-metric-grid">
+          ${reportMetric("Current Age", profile.currentAge)}
+          ${reportMetric("Retirement Age", profile.targetRetirementAge)}
+          ${reportMetric("Life Expectancy", profile.lifeExpectancy)}
+          ${reportMetric("Social Security Claim Age", currentSocialSecurityPlan?.claimAge ?? "Not available")}
+          ${reportMetric("Filing Status", profile.filingStatus || "Not provided")}
+        </div>
+      </section>
+      <section class="report-section report-snapshot-section">
+        <h3>Income &amp; Expenses</h3>
+        <div class="report-metric-grid">
+          ${reportMetric("Annual Income", money(metrics.totalIncome))}
+          ${reportMetric("Current Annual Expenses", money(profile.currentAnnualExpenses))}
+          ${reportMetric("Annual Savings", money(metrics.totalAnnualSavings))}
+          ${reportMetric("Savings Rate", percent(metrics.savingsRate))}
+        </div>
+      </section>
+      <section class="report-section report-snapshot-section">
+        <h3>Assets</h3>
+        <table class="report-table"><tbody>${assetRows}</tbody></table>
+      </section>
+    </section>
+    <section class="report-page report-final-page">
+      <header class="report-page-heading"><p class="report-kicker">IMPORTANT PLAN EVENTS</p><h2>Timeline Milestones</h2><p>Major events from the current modeled timeline, listed chronologically.</p></header>
+      <ol class="report-milestones">${milestoneMarkup}</ol>
+      <footer class="report-disclaimer">
+        <strong>Generated by WealthMap</strong>
+        <span>${escapeReportHtml(generationDate)}</span>
+        <p>This report is based on user-provided assumptions and planning inputs. Results are estimates and should not be considered financial, tax, legal, or investment advice.</p>
+      </footer>
+    </section>`;
+}
+
+function openPlanReport() {
+  if (!lastValidProjection || !currentValidationState.isValid) return;
+  $("#plan-report-content").innerHTML = planReportMarkup();
+  $("#plan-report-dialog").showModal();
 }
 
 function handleTimelineTableInput(event) {
@@ -2670,6 +2877,9 @@ function handleTimelineTableInput(event) {
   setTimelineOverride(Number(age), field, event.target.value);
   const { effectiveProfile, ssPlan } = resolveEffectiveProfile(workingProfile);
   const rows = buildTimelineRows(effectiveProfile);
+  currentTimelineRows = rows;
+  currentTimelineProfile = effectiveProfile;
+  currentSocialSecurityPlan = ssPlan;
   const summary = timelineSummary(rows, effectiveProfile);
   renderStrategySummary(ssPlan, effectiveProfile, summary);
   updateTimelineComputedCells(rows);
@@ -2868,6 +3078,8 @@ function renderMetrics() {
   currentValidationState = validation;
 
   if (!validation.isValid) {
+    $("#export-plan-pdf").disabled = true;
+    currentRecommendationItems = [];
     renderValidationMessages(validation);
     renderReadinessScoreFactors(null);
     renderReadinessRecommendationsCallToAction(null, []);
@@ -2877,6 +3089,7 @@ function renderMetrics() {
 
   renderValidationMessages(validation);
   const metrics = calculate(workingProfile);
+  $("#export-plan-pdf").disabled = false;
   lastValidProjection = metrics;
   setText("#sidebar-name", workingProfile.name || "Unnamed plan");
   setText(
@@ -2955,6 +3168,7 @@ function renderMetrics() {
   }
   updateSocialSecurityBenefitFieldVisibility();
   const currentRecommendations = recommendations(metrics, workingProfile);
+  currentRecommendationItems = currentRecommendations;
   renderReadinessRecommendationsCallToAction(metrics, currentRecommendations);
   renderRecommendations(metrics, currentRecommendations);
   renderSocialSecuritySchedule(metrics.socialSecurityPlan);
@@ -3160,6 +3374,19 @@ function init() {
   $("#readiness-recommendations-button").addEventListener("click", (event) =>
     showPage(event.currentTarget.dataset.page),
   );
+  $("#export-plan-pdf").addEventListener("click", openPlanReport);
+  $("#print-plan-report").addEventListener("click", () => window.print());
+  $("#close-plan-report").addEventListener("click", () =>
+    $("#plan-report-dialog").close(),
+  );
+  $("#plan-report-dialog").addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) event.currentTarget.close();
+  });
+  $("#additional-opportunities").addEventListener("toggle", (event) => {
+    event.currentTarget
+      .querySelector("summary")
+      .setAttribute("aria-expanded", String(event.currentTarget.open));
+  });
   window.addEventListener("hashchange", syncPageFromHash);
   window.addEventListener("popstate", syncPageFromHash);
   syncPageFromHash();

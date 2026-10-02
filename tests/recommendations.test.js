@@ -10,7 +10,7 @@ function loadRecommendationModel() {
   const sandbox = { console, Math, Number, Intl, Object, Array, JSON, Date };
   vm.createContext(sandbox);
   vm.runInContext(
-    `${dataSource}\n${appSource}\nvar __wealthMap = { recommendations, recommendationGroups, readinessRecommendationsCallToAction, timelineSummary, calculate, cloneSampleProfile };`,
+    `${dataSource}\n${appSource}\nvar __wealthMap = { recommendations, recommendationGroups, recommendationSectionHeading, readinessRecommendationsCallToAction, timelineSummary, buildTimelineRows, buildTimelineMilestones, resolveEffectiveProfile, calculate, cloneSampleProfile };`,
     sandbox,
     { filename: "wealth-map-recommendations.js" },
   );
@@ -20,8 +20,12 @@ function loadRecommendationModel() {
 const {
   recommendations,
   recommendationGroups,
+  recommendationSectionHeading,
   readinessRecommendationsCallToAction,
   timelineSummary,
+  buildTimelineRows,
+  buildTimelineMilestones,
+  resolveEffectiveProfile,
   calculate,
   cloneSampleProfile,
 } = loadRecommendationModel();
@@ -251,9 +255,68 @@ test("recommendation groups keep the top three and retain every remaining item",
     [100, 90, 80],
   );
   assert.equal(groups.top.length + groups.additional.length, items.length);
+  assert.equal(recommendationSectionHeading(items), "Top Recommendations");
 });
 
-test("Readiness CTA counts all high and medium recommendations, not only visible cards", () => {
+test("sample plan demonstrates moderate readiness and planning opportunities", () => {
+  const profile = cloneSampleProfile();
+  const metrics = calculate(profile);
+  const items = recommendations(metrics, profile);
+  const groups = recommendationGroups(items);
+  const { effectiveProfile, ssPlan } = resolveEffectiveProfile(profile);
+  const rows = buildTimelineRows(effectiveProfile);
+  const milestones = buildTimelineMilestones(
+    rows,
+    effectiveProfile,
+    ssPlan,
+  );
+
+  assert.ok(metrics.score >= 70 && metrics.score <= 80);
+  assert.equal(metrics.status, "Slightly Behind");
+  assert.ok(metrics.savingsRate >= 0.1 && metrics.savingsRate <= 0.12);
+  assert.ok(metrics.safeSpending < profile.retirementAnnualSpendingGoal);
+  assert.ok(
+    metrics.timelineDepletionAge === null || metrics.timelineDepletionAge >= 90,
+  );
+  assert.ok(metrics.timelineIrmaaAge);
+  assert.ok(metrics.projectedRothConversion > 0);
+
+  const titles = new Set(items.map((item) => item.title));
+  assert.ok(titles.has("Increase annual savings"));
+  assert.ok(titles.has("Align retirement spending with the estimate"));
+  assert.ok(titles.has("Consider Roth Conversions"));
+  assert.ok(titles.has("Review tax diversification"));
+  assert.ok(titles.has("Manage Future Medicare Surcharges"));
+  assert.equal(groups.top.length, 3);
+  assert.equal(groups.additional.length, items.length - 3);
+
+  assert.ok(
+    milestones.some((milestone) => milestone.label.includes("Retirement begins")),
+  );
+  assert.ok(
+    milestones.some(
+      (milestone) =>
+        milestone.age === 67 &&
+        milestone.label.includes("Social Security begins"),
+    ),
+  );
+  assert.ok(
+    milestones.some((milestone) => milestone.label.includes("Roth conversions begin")),
+  );
+  assert.ok(milestones.some((milestone) => milestone.label.includes("RMD start age")));
+  assert.ok(rows.some((row) => row.isRetired && row.withdrawal > 0));
+});
+
+test("informational-only recommendations use the planning opportunities heading", () => {
+  const items = recommendations(
+    baseMetrics({ timelineIrmaaAge: 65 }),
+    baseProfile(),
+  );
+
+  assert.equal(recommendationSectionHeading(items), "Planning Opportunities");
+});
+
+test("Readiness CTA counts the complete recommendation list, not only priority items", () => {
   const profile = baseProfile({ rothConversionStrategy: "auto" });
   const metrics = baseMetrics({
     timelineDepletionAge: 80,
@@ -270,7 +333,7 @@ test("Readiness CTA counts all high and medium recommendations, not only visible
   const cta = readinessRecommendationsCallToAction(metrics, items, true);
 
   assert.equal(cta.title, "Recommended Next Steps");
-  assert.match(cta.message, /has 5 recommended actions/);
+  assert.match(cta.message, /has 7 recommendations/);
   assert.equal(cta.action, "View Recommendations");
   assert.equal(cta.destination, "recommendations");
 });

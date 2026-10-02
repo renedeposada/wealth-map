@@ -103,6 +103,7 @@ Users need to answer questions such as:
 7. A user navigates between all six pages using persistent navigation and can always identify the current page.
 8. A user edits one or more profile, asset, income, expense, or assumption fields and immediately sees the score, projections, and recommendations update.
 9. A user can restore the original sample dataset after experimenting with values.
+10. A user can preview and print or save a concise Retirement Plan Summary PDF from Readiness, including current readiness outputs, the top three recommendations, a plan snapshot, major timeline milestones, and a disclaimer.
 
 ## 6. Information Architecture and Page Requirements
 
@@ -298,15 +299,17 @@ const sampleProfile = {
   name: "Alex Morgan",
   currentAge: 45,
   targetRetirementAge: 65,
-  lifeExpectancy: 90,
+  lifeExpectancy: 95,
   state: "Florida",
   filingStatus: "Married filing jointly",
-  annualSalary: 150000,
+  annualSalary: 180000,
   otherAnnualIncome: 0,
-  annualSavings: 30000,
-  currentAnnualExpenses: 85000,
-  retirementAnnualSpendingGoal: 75000,
-  expectedAnnualReturn: 0.05,
+  contributionRates: { fourOhOneK: 0.05 },
+  iraContributions: { traditionalIraAnnual: 0, rothIraAnnual: 3000 },
+  savingsAllocation: { brokerage: 0.75, cash: 0.25 },
+  currentAnnualExpenses: 140000,
+  retirementAnnualSpendingGoal: 100000,
+  expectedAnnualReturn: 0.0375,
   inflationRate: 0.025,
   projectionBasis: "real_dollars",
   safeWithdrawalRate: 0.04,
@@ -326,17 +329,19 @@ const sampleProfile = {
   niitThreshold: 250000,
   cashReserveTargetYears: 1,
   irmaaIncomeThreshold: 200000,
-  irmaaAnnualSurcharge: 0,
+  irmaaAnnualSurcharge: 1800,
   assets: {
-    brokerage: 180000,
-    fourOhOneK: 420000,
-    traditionalIra: 90000,
-    rothIra: 80000,
-    cash: 50000,
-    realEstate: 350000,
+    brokerage: 40000,
+    fourOhOneK: 275000,
+    traditionalIra: 75000,
+    rothIra: 25000,
+    cash: 20000,
+    realEstate: 450000,
   },
 };
 ```
+
+The default sample currently produces a 79-point `Slightly Behind` score, a 10.6% savings rate, estimated safe spending below its $100,000 goal, and several prioritized and informational planning opportunities. These are deterministic sample outputs, not promises about a user's plan.
 
 The exact sample values may be adjusted by the implementation agent, but the dataset must be internally consistent and must produce visible content in every required page. The implementation also keeps a separate, initially empty map of per-age wealth-timeline overrides; it is runtime state, not sample data, and is cleared whenever the sample dataset is reset.
 

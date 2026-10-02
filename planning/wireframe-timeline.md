@@ -12,7 +12,7 @@ The Wealth Timeline is the detailed retirement-planning workbench. It lets users
 +----------------------+----------------------+-------------------------------+
 | PROJECTED ASSETS     | PROJECTED DEPLETION  | YEARS WITH AN OVERRIDE        |
 | AT LIFE EXPECTANCY   |                      |                               |
-| $0                   | Not projected        | 0                             |
+| $0                   | Age 92               | 0                             |
 +----------------------+----------------------+-------------------------------+
 
 +--------------------------------------------------------------------------------+
@@ -32,30 +32,31 @@ The Wealth Timeline is the detailed retirement-planning workbench. It lets users
 | Illustrative single-filer estimates. This is not claiming optimization.      |
 |                                                                                |
 | Claim age          Annual benefit             Monthly benefit                  |
-| 62                 $0                         $0                               |
-| 63                 $0                         $0                               |
+| 62                 $44,100                    $3,675                           |
+| 63                 $47,250                    $3,938                           |
 | ...                ...                        ...                              |
-| 67  [FRA]         $0                         $0                               |
-| 70  [active *]    $0                         $0                               |
+| 67  [FRA]         $63,000                    $5,250                           |
+| 70  [active *]    $78,120                    $6,510                           |
 +--------------------------------------------------------------------------------+
 
 +--------------------------------------------------------------------------------+
 | RETIREMENT MILESTONES                                                         |
 |                                                                                |
-| [Age 65] Retirement begins     [Age 67] Social Security begins                |
-|          $0 ending assets                $0 ending assets                     |
-|          explanation                      explanation                         |
+| [Age 65] Retirement begins     [Age 65] Roth conversions begin                |
+|          projected portfolio              $206,700 first conversion           |
 |                                                                                |
-| [Age 72] First RMD             [Age 95] Life expectancy                       |
-|          $0 ending assets                $0 ending assets                     |
-|          explanation                      explanation                         |
+| [Age 67] Social Security begins [Age 68] Roth conversions end                  |
+|          $63,000 annual benefit           final modeled conversion            |
+|                                                                                |
+| [Age 73] RMD start age         [Age 92] Portfolio depletion                   |
+|          no RMD projected                before life expectancy at age 95      |
 +--------------------------------------------------------------------------------+
 
 +--------------------------------------------------------------------------------+
 | PORTFOLIO COMPOSITION AT PLANNING MILESTONES                                  |
 | Real estate is excluded because it is not treated as spendable assets.        |
 |                                                                                |
-| CURRENT YEAR       RETIREMENT BEGINS    FIRST RMD YEAR      LIFE EXPECTANCY  |
+| CURRENT YEAR       RETIREMENT BEGINS    RMD START AGE       LIFE EXPECTANCY  |
 | Total financial    Total financial      Total financial    Total financial   |
 | assets: $0         assets: $0           assets: $0         assets: $0        |
 | Cash       $0 / 0% Cash       $0 / 0%   Cash       $0 / 0% Cash       $0 / 0%|

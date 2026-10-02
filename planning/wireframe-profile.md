@@ -10,12 +10,12 @@
 | Name                         [ Alex Morgan                         ]           |
 | Current age                 [ 45        ] years                               |
 | Target retirement age       [ 65        ] years                               |
-| Life expectancy             [ 90        ] years                               |
+| Life expectancy             [ 95        ] years                               |
 | State                       [ Florida v ]                                     |
 | Tax filing status           [ Married filing jointly v ]                      |
 |                                                                                |
 | PROJECTION ASSUMPTIONS                                                         |
-| Expected annual return      [ 5.0       ] %                                   |
+| Expected annual return      [ 3.75      ] %                                   |
 | Inflation rate              [ 2.5       ] %                                   |
 | Safe withdrawal rate        [ 4.0       ] %                                   |
 | Projection basis            [ Real dollars v ]                                |

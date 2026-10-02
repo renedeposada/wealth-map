@@ -5,28 +5,29 @@
 | Recommendations                                                               |
 | Suggested next actions based on your current inputs                           |
 +--------------------------------------------------------------------------------+
-| TOP ACTIONS                                                                    |
+| TOP RECOMMENDATIONS                                                            |
 |                                                                                |
-| 01  HIGH PRIORITY     Increase annual savings                                 |
-|     Trigger: savings rate is below the target threshold.                      |
-|     Current metric: 20.0% savings rate.                                       |
-|     Suggested action: increase savings by $200 per month.                    |
-|     Effect: qualitative; may reduce the projected funding gap.                |
+| 01  HIGH PRIORITY     Address projected portfolio depletion                    |
+|     Trigger: depletion is projected by age 92.                                |
+|     Current metric: portfolio does not last through life expectancy 95.       |
+|     Suggested action: increase savings, delay retirement, or reduce spending. |
+|     Effect: qualitative; use the Timeline to inspect the annual path.          |
 |                                                                                |
-| 02  MEDIUM PRIORITY   Review retirement spending goal                          |
-|     Trigger: spending goal is high relative to projected assets.              |
-|     Current metric: $75,000 annual retirement spending goal.                  |
-|     Suggested action: compare a lower spending scenario.                      |
-|     Effect: qualitative; may improve readiness.                               |
+| 02  HIGH PRIORITY     Address the projected funding gap                       |
+|     Trigger: projected assets are below the sustainable requirement.          |
+|     Current metric: $116,855 funding gap.                                     |
+|     Suggested action: increase savings, delay retirement, or reduce spending. |
+|     Effect: qualitative; may improve plan sustainability.                     |
 |                                                                                |
-| 03  INFORMATIONAL     Review tax diversification                              |
-|     Trigger: most investable assets are tax-deferred.                         |
-|     Current metric: tax-deferred share of investable assets.                   |
-|     Suggested action: learn about account withdrawal sequencing.               |
-|     Effect: qualitative; no calculated impact is shown.                        |
+| 03  HIGH PRIORITY     Align retirement spending with the estimate              |
+|     Current metric: $100,000 goal; $95,846 estimated safe spending.           |
+|     Suggested action: reduce the goal by approximately $4,154 per year.       |
+|     Effect: qualitative; based on the shared Timeline estimate.                |
 |                                                                                |
-| Tax, Roth conversion, Social Security, IRMAA, and RMD suggestions are          |
-| educational future-feature examples only; no related calculation is performed.|
+| Additional Opportunities (4) [collapsed by default]                           |
+| Roth conversion ($206,700 first year), savings rate (10.6%), tax diversification|
+| (80.5% tax-deferred), and future IRMAA exposure (from age 65).                 |
+| All cards retain their situation, recommended action, and rationale.           |
 +--------------------------------------------------------------------------------+
 ```
 
