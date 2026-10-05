@@ -48,7 +48,16 @@
           </div>
           <div class="topbar-actions">
             <span class="state-indicator"><span class="status-dot"></span>Live model</span>
-            <button class="button button-quiet" id="reset-button" type="button">Reset sample data</button>
+            <div class="plan-actions">
+              <button class="button" id="plan-actions-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="plan-actions-menu">Plan Actions ▾</button>
+              <div class="plan-actions-menu" id="plan-actions-menu" hidden>
+                <button class="plan-actions-item" id="reset-button" type="button">Reset Sample Data</button>
+                <button class="plan-actions-item" id="download-workbook" type="button">Download Blank Planning Workbook</button>
+                <button class="plan-actions-item" id="import-workbook" type="button">Import Planning Workbook</button>
+                <button class="plan-actions-item" id="export-plan-pdf" type="button">Export Retirement Plan PDF</button>
+                <p class="plan-actions-message" id="plan-actions-message" role="status" aria-live="polite" hidden></p>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -60,7 +69,7 @@
                 <h2 id="readiness-heading">Can your plan carry you there?</h2>
                 <p>Update any assumption and watch the retirement picture respond immediately.</p>
               </div>
-              <div class="intro-meta"><span class="status-pill" id="readiness-status">On Track</span><span id="readiness-updated">Updated just now</span><button class="button" id="export-plan-pdf" type="button">Export Retirement Plan PDF</button></div>
+              <div class="intro-meta"><span class="status-pill" id="readiness-status">On Track</span><span id="readiness-updated">Updated just now</span></div>
             </div>
             <div class="readiness-grid">
               <article class="hero-score panel">

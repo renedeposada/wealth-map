@@ -3513,6 +3513,47 @@ function toggleMetricHelp(button) {
   button.setAttribute("aria-expanded", String(!isOpen));
 }
 
+function closePlanActions() {
+  $("#plan-actions-menu").hidden = true;
+  $("#plan-actions-button").setAttribute("aria-expanded", "false");
+  $("#plan-actions-message").hidden = true;
+}
+
+function showPlanActionsMessage(text) {
+  const message = $("#plan-actions-message");
+  message.textContent = text;
+  message.hidden = false;
+}
+
+function bindPlanActions() {
+  const button = $("#plan-actions-button");
+  const menu = $("#plan-actions-menu");
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const open = menu.hidden;
+    closePlanActions();
+    menu.hidden = !open;
+    button.setAttribute("aria-expanded", String(open));
+  });
+  menu.addEventListener("click", (event) => event.stopPropagation());
+  $("#download-workbook").addEventListener("click", () =>
+    showPlanActionsMessage("Workbook export will be available soon."),
+  );
+  $("#import-workbook").addEventListener("click", () =>
+    showPlanActionsMessage("Workbook import will be available soon."),
+  );
+  [$("#reset-button"), $("#export-plan-pdf")].forEach((item) =>
+    item.addEventListener("click", closePlanActions),
+  );
+  document.addEventListener("click", closePlanActions);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !menu.hidden) {
+      closePlanActions();
+      button.focus();
+    }
+  });
+}
+
 function resetSample() {
   workingProfile = cloneSampleProfile();
   lastValidProjection = null;
@@ -3574,6 +3615,7 @@ function init() {
   });
   $("#timeline-table-body").addEventListener("input", handleTimelineTableInput);
   $("#timeline-table-body").addEventListener("click", handleTimelineTableInput);
+  bindPlanActions();
   $("#open-menu").addEventListener("click", () => {
     $("#sidebar").classList.add("open");
     $("#scrim").hidden = false;
