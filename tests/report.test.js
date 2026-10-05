@@ -14,6 +14,7 @@ function loadReportModel() {
     `${dataSource}\n${appSource}\nvar __wealthMapReport = {
       buildTimelineRows,
       reportCheckpointRows,
+      reportFileTitle,
       reportPortfolio,
       cloneSampleProfile,
       resolveEffectiveProfile,
@@ -39,18 +40,29 @@ function loadReportModel() {
   return sandbox.__wealthMapReport;
 }
 
-test("sample report renders unique readiness metrics and populated timeline details", () => {
+test("sample report follows an executive-report flow without repeating plan inputs", () => {
   const reportModel = loadReportModel();
   const profile = reportModel.cloneSampleProfile();
   const { markup, rows } = reportModel.render(profile);
 
   assert.equal((markup.match(/Readiness Score/g) || []).length, 1);
   assert.equal((markup.match(/Readiness Status/g) || []).length, 1);
-  assert.equal((markup.match(/class="report-page(?:\s|")/g) || []).length, 3);
+  assert.equal((markup.match(/class="report-page(?:\s|")/g) || []).length, 4);
+  assert.match(markup, /class="report-page report-cover-page"[\s\S]*Retirement Readiness Report[\s\S]*Executive Summary/);
+  assert.match(markup, /Prepared for Alex Morgan/);
+  assert.match(markup, /Executive Summary/);
+  assert.match(markup, /Plan Snapshot/);
   assert.match(markup, /Portfolio Outlook/);
-  assert.match(markup, /Core Assumptions/);
-  assert.match(markup, /Total retirement portfolio/);
-  assert.match(markup, /Tax-deferred/);
+  assert.match(markup, /Retirement Journey/);
+  assert.match(markup, /Recommendations/);
+  assert.match(markup, /Planning Assumptions/);
+  assert.match(markup, /Estimated Safe Retirement Spending/);
+  assert.match(markup, /Current Net Worth/);
+  assert.match(markup, /Net worth includes real estate/);
+  assert.equal((markup.match(/Current Age/g) || []).length, 1);
+  assert.equal((markup.match(/Target Retirement Age/g) || []).length, 1);
+  assert.equal((markup.match(/Life Expectancy/g) || []).length, 1);
+  assert.doesNotMatch(markup, /Social Security Claim Age/);
   assert.match(markup, /Today&#39;s dollars \(real\)/);
   assert.doesNotMatch(markup, /undefined|null|NaN|\[object Object\]/);
 
@@ -60,7 +72,7 @@ test("sample report renders unique readiness metrics and populated timeline deta
   assert.ok(Math.abs(portfolio.total - bucketTotal) < 0.01);
 });
 
-test("portfolio outlook merges events at the same age and sorts checkpoints", () => {
+test("portfolio outlook merges and sorts its distinct financial checkpoints", () => {
   const reportModel = loadReportModel();
   const profile = reportModel.cloneSampleProfile();
   profile.socialSecurityClaimAge = profile.targetRetirementAge;
@@ -82,9 +94,9 @@ test("portfolio outlook merges events at the same age and sorts checkpoints", ()
     checkpointAges,
     [...new Set(checkpointAges)].sort((a, b) => a - b),
   );
+  assert.ok(checkpoints.some((checkpoint) => checkpoint.labels.includes("Today")));
   assert.match(retirementCheckpoint.labels.join(" "), /Planned retirement/);
-  assert.match(retirementCheckpoint.labels.join(" "), /Social Security claim/);
-  assert.match(retirementCheckpoint.labels.join(" "), /RMD start/);
+  assert.ok(checkpoints.some((checkpoint) => checkpoint.labels.includes("Peak portfolio value")));
 });
 
 test("report handles no depletion with Roth conversions and IRMAA disabled", () => {
@@ -97,7 +109,16 @@ test("report handles no depletion with Roth conversions and IRMAA disabled", () 
   profile.irmaaAnnualSurcharge = 0;
   const { markup } = reportModel.render(profile);
 
-  assert.match(markup, /No projected asset depletion identified\./);
+  assert.match(markup, /None projected through life expectancy/);
   assert.doesNotMatch(markup, /Projected depletion|Roth conversions begin|First IRMAA year/);
   assert.doesNotMatch(markup, /<span>Roth conversion strategy<\/span>/);
+});
+
+test("report filename uses uppercase first and last initials and local YYMMDD date", () => {
+  const reportModel = loadReportModel();
+  const date = new Date(2026, 9, 5);
+
+  assert.equal(reportModel.reportFileTitle("Riley Danielle Parker", date), "Retirement_Readiness_RP_261005");
+  assert.equal(reportModel.reportFileTitle("Alex", date), "Retirement_Readiness_A_261005");
+  assert.equal(reportModel.reportFileTitle("", date), "Retirement_Readiness_261005");
 });

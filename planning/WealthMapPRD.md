@@ -103,7 +103,7 @@ Users need to answer questions such as:
 7. A user navigates between all six pages using persistent navigation and can always identify the current page.
 8. A user edits one or more profile, asset, income, expense, or assumption fields and immediately sees the score, projections, and recommendations update.
 9. A user can restore the original sample dataset after experimenting with values.
-10. A user can preview and print or save a concise Retirement Plan Summary PDF from Readiness, including current readiness outputs, the top three recommendations, a plan snapshot, major timeline milestones, and a disclaimer.
+10. A user can preview and print or save an executive-style Retirement Readiness report from Readiness. The report presents one authoritative executive summary, a plan snapshot, portfolio outlook, chronological retirement milestones, prioritized recommendations, and planning assumptions at the end, with an educational disclaimer. The print dialog suggests `Retirement_Readiness_[INITIALS]_YYMMDD` (without initials when a plan name is unavailable).
 
 ## 6. Information Architecture and Page Requirements
 

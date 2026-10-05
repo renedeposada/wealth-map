@@ -2755,34 +2755,43 @@ function reportCheckpointRows(rows, profile, ssPlan, depletionAge) {
 
   add(profile.currentAge, "Today");
   add(profile.targetRetirementAge, "Planned retirement");
-  add(ssPlan?.claimAge, "Social Security claim");
-  add(profile.rmdStartAge, "RMD start");
-  add(depletionAge, "Projected depletion");
-  add(profile.lifeExpectancy, "Life expectancy");
+  const peakRow = rows.reduce(
+    (best, row) => (row.endTotal > best.endTotal ? row : best),
+    rows[0],
+  );
+  add(peakRow?.age, "Peak portfolio value");
+  add(depletionAge ?? profile.lifeExpectancy, depletionAge == null ? "Life expectancy" : "Projected depletion");
   return [...checkpoints.values()].sort((left, right) => left.age - right.age);
 }
 
-function reportStatusInterpretation(metrics, profile) {
+function reportStatusInterpretation(metrics) {
   const depletionAge = reportNumber(metrics.timelineDepletionAge);
-  const yearsBeforeLifeExpectancy = depletionAge === null
-    ? null
-    : Math.max(0, Number(profile.lifeExpectancy) - depletionAge);
-  const depletionDetail = depletionAge === null
-    ? ""
-    : ` The timeline projects portfolio depletion at age ${depletionAge}${yearsBeforeLifeExpectancy > 0 ? `, ${yearsBeforeLifeExpectancy} years before life expectancy` : ""}.`;
-  const fundingDetail = metrics.fundingDelta > 0
-    ? ` The projected funding gap is ${money(metrics.fundingDelta)}.`
-    : "";
+  const outlook = depletionAge !== null
+    ? "The plan has a long-term portfolio sustainability risk to address."
+    : metrics.status === "On Track"
+      ? "The outlook is positive under current assumptions."
+      : "The plan needs adjustments to strengthen retirement readiness.";
+  const focus = depletionAge !== null
+    ? "Focus first on improving later-retirement resilience."
+    : metrics.fundingDelta > 0
+      ? "Focus on funding through savings, timing, or spending adjustments."
+      : metrics.status === "On Track"
+        ? "Revisit the plan as income, spending, and assumptions change."
+        : "Review savings, retirement timing, and spending to strengthen the plan.";
+  return `${outlook} ${focus}`;
+}
 
-  if (metrics.status === "On Track") {
-    return depletionAge === null
-      ? `Based on current assumptions, the plan is projected to remain sustainable through age ${profile.lifeExpectancy}.${fundingDetail}`
-      : `Readiness measures place the plan On Track, but its timeline also shows a later-horizon sustainability issue.${depletionDetail}${fundingDetail}`;
-  }
-  if (metrics.status === "Slightly Behind") {
-    return `The plan is close to its retirement target, but one or more gaps need adjustment.${fundingDetail}${depletionDetail}`;
-  }
-  return `The plan has substantial funding or sustainability gaps that need attention.${fundingDetail}${depletionDetail}`;
+function reportFileTitle(name, date = new Date()) {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  const normalizeInitial = (part) =>
+    part.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, "").charAt(0);
+  const initials = parts.length
+    ? `${normalizeInitial(parts[0])}${parts.length > 1 ? normalizeInitial(parts[parts.length - 1]) : ""}`.toUpperCase()
+    : "";
+  const year = String(date.getFullYear() % 100).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `Retirement_Readiness${initials ? `_${initials}` : ""}_${year}${month}${day}`;
 }
 
 function planReportMarkup() {
@@ -2808,16 +2817,6 @@ function planReportMarkup() {
         )
         .join("")
     : '<p class="report-empty">No top recommendations are currently identified for this plan.</p>';
-  const assetGroups = [
-    ["Tax-deferred assets", numberValue(profile.assets.fourOhOneK) + numberValue(profile.assets.traditionalIra)],
-    ["Roth assets", numberValue(profile.assets.rothIra)],
-    ["Brokerage assets", numberValue(profile.assets.brokerage)],
-    ["Cash assets", numberValue(profile.assets.cash)],
-    ["Total financial assets", metrics.financialAssets],
-  ];
-  const assetRows = assetGroups
-    .map(([label, value]) => `<tr><th scope="row">${escapeReportHtml(label)}</th><td>${escapeReportHtml(money(value))}</td></tr>`)
-    .join("");
   const reportMilestoneLabels = new Set([
     "Retirement begins",
     "Social Security begins",
@@ -2836,7 +2835,16 @@ function planReportMarkup() {
         Number.POSITIVE_INFINITY,
       )
         .map((milestone) => {
-          const labels = milestone.labels.filter((label) => reportMilestoneLabels.has(label));
+          const labels = milestone.labels
+            .filter((label) => reportMilestoneLabels.has(label))
+            .map((label) => ({
+              "Social Security begins": "Social Security starts",
+              "Roth conversions end": "Roth conversion strategy complete",
+              "First RMD": "Required minimum distributions begin",
+              "RMD start age": "Required minimum distributions begin",
+              "First IRMAA year": "First Medicare surcharge year",
+              "Portfolio depletion": "Projected portfolio depletion",
+            }[label] || label));
           const timelineRow = currentTimelineRows.find((row) => row.age === milestone.age);
           const portfolio = reportPortfolio(timelineRow);
           let values = (milestone.values || [])
@@ -2846,30 +2854,31 @@ function planReportMarkup() {
               value: entry.valueFormat === "text" ? String(entry.value) : money(entry.value),
             }));
           if (labels.includes("Retirement begins") && portfolio) {
-            values = [
-              { label: "Total retirement portfolio", value: money(portfolio.total) },
-              { label: "Tax-deferred", value: money(portfolio.taxDeferred) },
-              { label: "Roth", value: money(portfolio.roth) },
-              { label: "Brokerage", value: money(portfolio.brokerage) },
-              { label: "Cash", value: money(portfolio.cash) },
-            ];
+            values = [{ label: "Portfolio value", value: money(portfolio.total) }];
           }
           if (labels.includes("Portfolio depletion") && portfolio) {
-            const years = Math.max(0, Number(timelineProfile.lifeExpectancy) - milestone.age);
             values = [{
-              label: "Remaining portfolio",
-              value: `${money(portfolio.total)}${years > 0 ? `; ${years} years before life expectancy` : "; at life expectancy"}`,
+              label: "Projected balance",
+              value: money(portfolio.total),
             }];
           }
-          return { ...milestone, reportLabels: labels, reportValues: values };
+          const descriptions = milestone.descriptions || [];
+          return {
+            ...milestone,
+            reportLabels: labels,
+            reportValues: values.slice(0, 1),
+            reportDescription: descriptions.join(" "),
+          };
         })
         .filter((milestone) => milestone.reportLabels.length)
     : [];
   const milestoneMarkup = milestones.length
     ? milestones
         .map((milestone) => `<li>
-            <span>Age ${escapeReportHtml(milestone.age)}</span>
-            <div><strong>${escapeReportHtml(milestone.reportLabels.join(" • "))}</strong>
+            <span class="report-milestone-age">Age ${escapeReportHtml(milestone.age)}</span>
+            <div class="report-milestone-content">
+              <strong>${escapeReportHtml(milestone.reportLabels.join(" • "))}</strong>
+              ${milestone.reportDescription ? `<p>${escapeReportHtml(milestone.reportDescription)}</p>` : ""}
               ${milestone.reportValues.length
                 ? `<div class="report-milestone-values">${milestone.reportValues
                     .map((entry) => `<p><span>${escapeReportHtml(entry.label)}:</span> <strong>${escapeReportHtml(entry.value)}</strong></p>`)
@@ -2889,18 +2898,21 @@ function planReportMarkup() {
     ? outlookRows
         .map(({ age, labels, row }) => {
           const portfolio = reportPortfolio(row);
+          const checkpointLabels = labels.filter((label) => label !== "Peak portfolio value");
+          const checkpoint = checkpointLabels.length
+            ? checkpointLabels.join(" / ")
+            : "Peak projected portfolio";
+          const portfolioValue = labels.includes("Today")
+            ? metrics.financialAssets
+            : portfolio?.total;
           return `<tr>
-            <th scope="row">${escapeReportHtml(labels.join(" / "))}</th>
+            <th scope="row">${escapeReportHtml(checkpoint)}</th>
             <td>${escapeReportHtml(age)}</td>
-            <td>${escapeReportHtml(money(portfolio.total))}</td>
-            <td>${escapeReportHtml(money(portfolio.taxDeferred))}</td>
-            <td>${escapeReportHtml(money(portfolio.roth))}</td>
-            <td>${escapeReportHtml(money(portfolio.brokerage))}</td>
-            <td>${escapeReportHtml(money(portfolio.cash))}</td>
+            <td>${escapeReportHtml(money(portfolioValue))}</td>
           </tr>`;
         })
         .join("")
-    : '<tr><td colspan="7" class="report-empty">Portfolio checkpoints are not available for this plan.</td></tr>';
+    : "";
   const assumptions = [];
   const addAssumption = (label, value) => {
     if (value !== null && value !== undefined && value !== "") assumptions.push([label, value]);
@@ -2912,28 +2924,37 @@ function planReportMarkup() {
   addPercentAssumption("Expected annual return", timelineProfile.expectedAnnualReturn);
   addPercentAssumption("Inflation rate", timelineProfile.inflationRate);
   addPercentAssumption("Safe withdrawal rate", timelineProfile.safeWithdrawalRate);
-  const spendingGoal = reportNumber(timelineProfile.retirementAnnualSpendingGoal);
-  if (spendingGoal !== null) addAssumption("Retirement spending goal", money(spendingGoal));
-  addAssumption("Social Security claim age", currentSocialSecurityPlan?.claimAge == null ? null : `Age ${currentSocialSecurityPlan.claimAge}`);
-  addAssumption("RMD start age", reportNumber(timelineProfile.rmdStartAge) == null ? null : `Age ${timelineProfile.rmdStartAge}`);
-  addAssumption(
-    "Projection basis",
-    "Today's dollars (real)",
-  );
+  addAssumption("Projection basis", timelineProfile.projectionBasis === "real_dollars" ? "Today's dollars (real)" : "Nominal dollars");
+  addAssumption("Federal standard deduction", money(timelineProfile.federalStandardDeduction));
+  addAssumption("Federal income tax", "Simplified progressive brackets by filing status");
+  addPercentAssumption("State income tax rate", timelineProfile.stateIncomeTaxRate);
+  addPercentAssumption("Taxable gains tax rate", timelineProfile.taxableGainsTaxRate);
+  addPercentAssumption("Pre-tax withdrawal tax rate", timelineProfile.preTaxWithdrawalTaxRate);
+  addAssumption("NIIT MAGI threshold", money(timelineProfile.niitThreshold));
+  addAssumption("Illustrative NIIT rate", "3.8% above the MAGI threshold");
+  addAssumption("IRMAA income threshold", money(timelineProfile.irmaaIncomeThreshold));
+  addAssumption("Annual IRMAA surcharge", money(timelineProfile.irmaaAnnualSurcharge));
+  addAssumption("RMD rules", "Illustrative age-indexed divisor schedule");
+  addAssumption("Cash reserve target", `${numberValue(timelineProfile.cashReserveTargetYears)} years of retirement spending`);
+  addAssumption("Social Security benefit", currentSocialSecurityPlan?.annualBenefit > 0 ? `${money(currentSocialSecurityPlan.annualBenefit)} per year` : "No benefit modeled");
+  addPercentAssumption("Social Security taxable share", timelineProfile.socialSecurityTaxablePercent);
   const firstConversion = currentTimelineRows.find((row) => row.rothConversion > 0);
   if (timelineProfile.rothConversionStrategy === "auto" && firstConversion) {
-    addAssumption("Roth conversion strategy", `Model-generated; first conversion ${money(firstConversion.rothConversion)} at age ${firstConversion.age}`);
+    addAssumption("Roth conversion strategy", "Model-generated illustrative strategy");
   } else if (timelineProfile.rothConversionStrategy === "auto") {
-    addAssumption("Roth conversion strategy", "Model-generated; no conversions projected under current assumptions");
-  } else if (timelineProfile.rothConversionStrategy === "manual" && numberValue(timelineProfile.rothConversionAnnualAmount) > 0) {
-    addAssumption("Roth conversion strategy", `Manual; ${money(timelineProfile.rothConversionAnnualAmount)} per year`);
+    addAssumption("Roth conversion strategy", "No conversions projected under current assumptions");
+  } else if (
+    timelineProfile.rothConversionStrategy === "manual" &&
+    numberValue(timelineProfile.rothConversionAnnualAmount) > 0
+  ) {
+    addAssumption("Roth conversion strategy", "Manual annual amount entered in the plan");
   }
   const assumptionsMarkup = assumptions
     .map(([label, value]) => reportMetric(label, value))
     .join("");
   const fundingLabel = metrics.fundingDelta > 0 ? "Funding gap" : "Funding surplus";
   const depletionValue = reportNumber(metrics.timelineDepletionAge) === null
-    ? "No projected asset depletion identified."
+    ? "None projected through life expectancy"
     : `Age ${metrics.timelineDepletionAge}`;
   const reportName = profile.name?.trim() || "Personal retirement plan";
   const expectedAge = metrics.expectedRetirementAge == null
@@ -2942,66 +2963,55 @@ function planReportMarkup() {
 
   return `<section class="report-page report-cover-page">
       <header class="report-brand"><span class="report-brand-mark">WM</span><span>WEALTHMAP</span><time>${escapeReportHtml(generationDate)}</time></header>
-      <p class="report-kicker">RETIREMENT PLAN SUMMARY</p>
-      <h1>WealthMap Retirement Plan Summary</h1>
-      <p class="report-prepared-for">Prepared for ${escapeReportHtml(reportName)}</p>
-      <p class="report-executive-summary">${escapeReportHtml(reportStatusInterpretation(metrics, profile))}</p>
-      <div class="report-cover-stats">
-        ${reportMetric("Readiness Score", `${metrics.score} / 100`)}
-        ${reportMetric("Readiness Status", metrics.status)}
-        ${reportMetric("Current Age", profile.currentAge)}
-        ${reportMetric("Planned Retirement Age", profile.targetRetirementAge)}
+      <div class="report-cover-title">
+        <h1>Retirement Readiness Report</h1>
+        <p class="report-prepared-for">Prepared for ${escapeReportHtml(reportName)}</p>
       </div>
-      <section class="report-section">
-        <h2>Readiness Summary</h2>
-        <div class="report-metric-grid">
-          ${reportMetric("Expected Retirement Age", expectedAge)}
-          ${reportMetric("Estimated Safe Spending", money(metrics.safeSpending))}
-          ${reportMetric(fundingLabel, money(Math.abs(metrics.fundingDelta)))}
-          ${reportMetric("Projected Portfolio Depletion Age", depletionValue)}
+      <header class="report-page-heading"><p class="report-kicker">AT A GLANCE</p><h2>Executive Summary</h2><p>Your retirement outlook, funding position, and the primary factor to focus on.</p></header>
+      <div class="report-executive-summary">${reportMetric("Readiness Score", `${metrics.score} / 100`)}
+        ${reportMetric("Readiness Status", metrics.status)}
+        ${reportMetric(fundingLabel, money(Math.abs(metrics.fundingDelta)))}
+        ${reportMetric("Estimated Safe Retirement Spending", `${money(metrics.safeSpending)} per year`)}
+        ${reportMetric("Expected Retirement Age", expectedAge)}
+        ${reportMetric("Projected Portfolio Depletion", depletionValue)}
+      </div>
+      <p class="report-executive-narrative">${escapeReportHtml(reportStatusInterpretation(metrics))}</p>
+      <p class="report-score-note">The Retirement Health Score is a documented heuristic, not a probability or guarantee.</p>
+      <section class="report-section report-snapshot-section">
+        <header class="report-page-heading"><p class="report-kicker">YOUR PLAN</p><h2>Plan Snapshot</h2><p>Key personal and financial inputs currently used by the projection.</p></header>
+        <div class="report-metric-grid report-plan-snapshot">
+          ${reportMetric("Current Age", profile.currentAge)}
+          ${reportMetric("Target Retirement Age", profile.targetRetirementAge)}
+          ${reportMetric("Life Expectancy", profile.lifeExpectancy)}
+          ${reportMetric("Filing Status", profile.filingStatus || "")}
+          ${reportMetric("Current Annual Income", money(metrics.totalIncome))}
+          ${reportMetric("Current Annual Expenses", money(profile.currentAnnualExpenses))}
+          ${reportMetric("Current Net Worth", money(metrics.totalAssets))}
         </div>
+        <p class="report-method-note">Net worth includes real estate. Real estate is excluded from spendable retirement portfolio projections.</p>
       </section>
-      <p class="report-score-note">The Retirement Health Score is a heuristic estimate, not a probability.</p>
     </section>
     <section class="report-page">
-      <header class="report-page-heading"><p class="report-kicker">PRIORITIZED NEXT STEPS</p><h2>Recommended Actions</h2><p>Based on current plan inputs and existing recommendation rules.</p></header>
-      <div class="report-recommendations">${recommendationMarkup}</div>
-    </section>
-    <section class="report-page report-final-page">
-      <header class="report-page-heading"><p class="report-kicker">PLAN &amp; PORTFOLIO OUTLOOK</p><h2>Plan and Portfolio Outlook</h2></header>
+      <header class="report-page-heading"><p class="report-kicker">PROJECTED ASSETS</p><h2>Portfolio Outlook</h2><p>Major checkpoints from the shared year-by-year Timeline projection.</p></header>
+      <table class="report-table report-outlook-table">
+        <thead><tr><th scope="col">Planning checkpoint</th><th scope="col">Age</th><th scope="col">Investable portfolio</th></tr></thead>
+        <tbody>${outlookMarkup || '<tr><td colspan="3" class="report-empty">Portfolio checkpoints are not available for this plan.</td></tr>'}</tbody>
+      </table>
+      <p class="report-method-note">The current checkpoint reflects plan balances; later checkpoints are end-of-year projections in today's dollars (real). Investable portfolio includes cash but excludes real estate and other non-portfolio assets. Tax-aware values are illustrative estimates.</p>
       <section class="report-section report-snapshot-section">
-        <h3>Plan Snapshot</h3>
-        <div class="report-metric-grid">
-          ${reportMetric("Current Age", profile.currentAge)}
-          ${reportMetric("Retirement Age", profile.targetRetirementAge)}
-          ${reportMetric("Life Expectancy", profile.lifeExpectancy)}
-          ${reportMetric("Social Security Claim Age", currentSocialSecurityPlan?.claimAge == null ? "" : `Age ${currentSocialSecurityPlan.claimAge}`)}
-          ${reportMetric("Filing Status", profile.filingStatus || "")}
-          ${reportMetric("Annual Income", money(metrics.totalIncome))}
-          ${reportMetric("Current Annual Expenses", money(profile.currentAnnualExpenses))}
-          ${reportMetric("Total Annual Savings", money(metrics.totalAnnualSavings))}
-          ${reportMetric("Personal Savings Rate", percent(metrics.savingsRate))}
-        </div>
-        <p class="report-method-note">Personal Savings Rate uses personal contributions and excludes employer contributions.</p>
-        <table class="report-table"><tbody>${assetRows}</tbody></table>
-      </section>
-      <section class="report-section report-snapshot-section">
-        <h3>Portfolio Outlook</h3>
-        <table class="report-table report-outlook-table">
-          <thead><tr><th scope="col">Planning point</th><th scope="col">Age</th><th scope="col">Total</th><th scope="col">Tax-deferred</th><th scope="col">Roth</th><th scope="col">Brokerage</th><th scope="col">Cash</th></tr></thead>
-          <tbody>${outlookMarkup}</tbody>
-        </table>
-        <p class="report-method-note">Values are in today's dollars (real) and show end-of-year balances from the Timeline. Real estate and other non-portfolio assets are excluded.</p>
-      </section>
-      <section class="report-section report-snapshot-section">
-        <h3>Timeline Milestones</h3>
+        <header class="report-page-heading"><p class="report-kicker">MILESTONES IN AGE ORDER</p><h2>Retirement Journey</h2><p>Key transitions and projected events along the retirement timeline.</p></header>
         <ol class="report-milestones">${milestoneMarkup}</ol>
         <p class="report-method-note">Milestone portfolio values use end-of-year balances from the same Timeline projection.</p>
       </section>
-      <section class="report-section report-snapshot-section">
-        <h3>Core Assumptions</h3>
-        <div class="report-metric-grid">${assumptionsMarkup}</div>
-      </section>
+    </section>
+    <section class="report-page">
+      <header class="report-page-heading"><p class="report-kicker">PRIORITIZED NEXT STEPS</p><h2>Recommendations</h2><p>Actionable planning ideas based on the current inputs and rule-based triggers.</p></header>
+      <div class="report-recommendations">${recommendationMarkup}</div>
+      <p class="report-method-note">Recommendations are educational prompts, not individualized financial advice. Impacts are only quantified where the model calculates them.</p>
+    </section>
+    <section class="report-page report-final-page">
+      <header class="report-page-heading"><p class="report-kicker">SUPPORTING DETAILS</p><h2>Planning Assumptions</h2><p>Illustrative inputs and simplified rules behind the projections.</p></header>
+      <div class="report-metric-grid">${assumptionsMarkup}</div>
       <footer class="report-disclaimer">
         <strong>Generated by WealthMap</strong>
         <span>${escapeReportHtml(generationDate)}</span>
@@ -3014,6 +3024,17 @@ function openPlanReport() {
   if (!lastValidProjection || !currentValidationState.isValid) return;
   $("#plan-report-content").innerHTML = planReportMarkup();
   $("#plan-report-dialog").showModal();
+}
+
+function printPlanReport() {
+  const previousTitle = document.title;
+  document.title = reportFileTitle(workingProfile.name);
+  const restoreTitle = () => {
+    document.title = previousTitle;
+    window.removeEventListener("afterprint", restoreTitle);
+  };
+  window.addEventListener("afterprint", restoreTitle);
+  window.print();
 }
 
 function handleTimelineTableInput(event) {
@@ -3527,7 +3548,7 @@ function init() {
     showPage(event.currentTarget.dataset.page),
   );
   $("#export-plan-pdf").addEventListener("click", openPlanReport);
-  $("#print-plan-report").addEventListener("click", () => window.print());
+  $("#print-plan-report").addEventListener("click", printPlanReport);
   $("#close-plan-report").addEventListener("click", () =>
     $("#plan-report-dialog").close(),
   );

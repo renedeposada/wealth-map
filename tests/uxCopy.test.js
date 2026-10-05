@@ -93,7 +93,7 @@ test("Readiness links to recommendations and the page separates top and addition
   assert.ok(appJs.includes('setAttribute("aria-expanded", String(event.currentTarget.open))'));
 });
 
-test("Readiness exports a concise preview using existing plan outputs", () => {
+test("Readiness exports an executive report using existing plan outputs", () => {
   const reportSource = appJs.slice(appJs.indexOf("function planReportMarkup()"), appJs.indexOf("function openPlanReport()"));
   assert.ok(indexHtml.includes('id="export-plan-pdf"'));
   assert.ok(indexHtml.includes('id="plan-report-dialog"'));
@@ -102,17 +102,19 @@ test("Readiness exports a concise preview using existing plan outputs", () => {
   assert.ok(appJs.includes("buildTimelineMilestones("));
   assert.ok(appJs.includes("function reportCheckpointRows("));
   assert.ok(appJs.includes("function reportPortfolio("));
-  assert.ok(appJs.includes("Tax-deferred"));
+  assert.ok(appJs.includes("Executive Summary"));
+  assert.ok(appJs.includes("Plan Snapshot"));
   assert.ok(appJs.includes("Portfolio Outlook"));
-  assert.ok(appJs.includes("Core Assumptions"));
-  assert.ok(appJs.includes("Total Annual Savings"));
-  assert.ok(appJs.includes("Personal Savings Rate"));
+  assert.ok(appJs.includes("Retirement Journey"));
+  assert.ok(appJs.includes("Planning Assumptions"));
+  assert.ok(appJs.includes("Current Net Worth"));
+  assert.ok(appJs.includes("function reportFileTitle("));
   assert.equal(countOccurrences(reportSource, 'reportMetric("Readiness Score"'), 1);
   assert.equal(countOccurrences(reportSource, 'reportMetric("Readiness Status"'), 1);
   assert.ok(appJs.includes('row.endBalances'));
   assert.ok(appJs.includes('buildTimelineMilestones('));
   assert.ok(indexHtml.includes("Turn off Headers and footers"));
-  assert.ok(appJs.includes("No projected asset depletion identified."));
+  assert.ok(appJs.includes("None projected through life expectancy"));
   assert.ok(appJs.includes("This report is based on user-provided assumptions and planning inputs."));
   assert.match(stylesCss, /@media print\s*\{/);
   assert.ok(stylesCss.includes(".report-page:last-child"));

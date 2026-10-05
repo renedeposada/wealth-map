@@ -40,4 +40,4 @@
 - If the target is not reached by life expectancy, show `Beyond life expectancy`.
 - Never describe the score as a probability of success.
 - Provide score context on demand through the information control: it summarizes funding progress, savings, retirement timing, and Timeline sustainability; it updates with assumptions and is a planning aid rather than a guarantee.
-- Provide an export action that opens a concise, printable Retirement Plan Summary with executive/readiness results, the current top three recommendations, a plan snapshot, major timeline milestones, and the educational disclaimer. Do not include Additional Opportunities or yearly timeline rows.
+- Provide an export action that opens a printable Retirement Readiness report with one authoritative executive summary, a plan snapshot, portfolio outlook, a chronological Retirement Journey, prioritized recommendations, and Planning Assumptions as the final section. Include the educational disclaimer; do not include Additional Opportunities or yearly timeline rows. The suggested PDF filename uses `Retirement_Readiness_[INITIALS]_YYMMDD`, omitting initials when a plan name is unavailable.
