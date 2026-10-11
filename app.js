@@ -829,6 +829,17 @@ function findExpectedRetirementAge(profile) {
   return null;
 }
 
+// Directly editable Timeline override fields (the keys stored in workingProfile.timelineOverrides[age]).
+// `period` mirrors timelineOverrideIsAllowed(); `min` mirrors setTimelineOverride(). Return is stored in
+// percentage points (5 = 5%), unlike profile percentages, which are stored as decimals.
+const TIMELINE_OVERRIDE_FIELDS = Object.freeze([
+  { field: "returnPercent", label: "Return override", dataType: "percent", period: "any", min: -100 },
+  { field: "income", label: "Income override", dataType: "currency", period: "working", min: 0 },
+  { field: "expenses", label: "Spending override", dataType: "currency", period: "any", min: 0 },
+  { field: "extraCashNeed", label: "Additional need", dataType: "currency", period: "working", min: 0 },
+  { field: "extraWithdrawal", label: "Extra withdrawal", dataType: "currency", period: "retired", min: 0 },
+]);
+
 function timelineOverrideIsAllowed(profile, age, field) {
   const startAge = Math.round(numberValue(profile.currentAge));
   const endAge = Math.round(numberValue(profile.lifeExpectancy));
@@ -3349,6 +3360,17 @@ function renderMetrics() {
   return metrics;
 }
 
+// Fields that may be cleared in the UI; a blank value means zero rather than "missing".
+const OPTIONAL_BLANK_FIELDS = Object.freeze(new Set([
+  "otherAnnualIncome",
+  "rothConversionAnnualAmount",
+  "socialSecurityAnnualBenefit",
+  "irmaaAnnualSurcharge",
+  "assets.realEstate",
+  "iraContributions.traditionalIraAnnual",
+  "iraContributions.rothIraAnnual",
+]));
+
 function updateWorkingValue(field, rawValue, type) {
   if (field === "socialSecurityBenefitMode") {
     workingProfile.socialSecurityBenefitMode = rawValue;
@@ -3358,15 +3380,7 @@ function updateWorkingValue(field, rawValue, type) {
   }
 
   const path = field.split(".");
-  const optionalBlankFields = new Set([
-    "otherAnnualIncome",
-    "rothConversionAnnualAmount",
-    "socialSecurityAnnualBenefit",
-    "irmaaAnnualSurcharge",
-    "assets.realEstate",
-    "iraContributions.traditionalIraAnnual",
-    "iraContributions.rothIraAnnual",
-  ]);
+  const optionalBlankFields = OPTIONAL_BLANK_FIELDS;
 
   const value =
     type === "percent"
@@ -3536,12 +3550,22 @@ function bindPlanActions() {
     button.setAttribute("aria-expanded", String(open));
   });
   menu.addEventListener("click", (event) => event.stopPropagation());
-  $("#download-workbook").addEventListener("click", () =>
-    showPlanActionsMessage("Workbook export will be available soon."),
-  );
-  $("#import-workbook").addEventListener("click", () =>
-    showPlanActionsMessage("Workbook import will be available soon."),
-  );
+  $("#download-workbook").addEventListener("click", async (event) => {
+    event.stopPropagation();
+    try {
+      await downloadBlankPlanningWorkbook();
+      closePlanActions();
+    } catch (error) {
+      showPlanActionsMessage("Workbook download failed. Please try again.");
+    }
+  });
+  $("#import-workbook").addEventListener("click", (event) => {
+    event.stopPropagation();
+    closePlanActions();
+    button.focus();
+    openWorkbookFilePicker();
+  });
+  bindWorkbookImport();
   [$("#reset-button"), $("#export-plan-pdf")].forEach((item) =>
     item.addEventListener("click", closePlanActions),
   );
@@ -3554,16 +3578,46 @@ function bindPlanActions() {
   });
 }
 
+// Replaces the whole working plan and re-renders. If anything throws, the previous plan is restored
+// so a failed import or reset never leaves a half-applied state.
+function replaceWorkingProfile(profile) {
+  const previous = {
+    workingProfile,
+    lastValidProjection,
+    currentValidationState,
+  };
+  const rerender = () => {
+    renderFormFields();
+    renderAssetFields();
+    restoreAdvancedTaxSettingsState();
+    bindFieldListeners();
+    renderValidationMessages(currentValidationState);
+    renderMetrics();
+  };
+  try {
+    workingProfile = profile;
+    lastValidProjection = null;
+    currentValidationState = { blockingErrors: [], warnings: [], isValid: true };
+    rerender();
+  } catch (error) {
+    workingProfile = previous.workingProfile;
+    lastValidProjection = previous.lastValidProjection;
+    currentValidationState = previous.currentValidationState;
+    try {
+      rerender();
+    } catch {
+      // The restored state is already in place; a second render failure must not mask the original.
+    }
+    throw error;
+  }
+}
+
+function currentWorkingProfile() {
+  return workingProfile;
+}
+
 function resetSample() {
-  workingProfile = cloneSampleProfile();
-  lastValidProjection = null;
-  currentValidationState = { blockingErrors: [], warnings: [], isValid: true };
-  renderFormFields();
-  renderAssetFields();
-  restoreAdvancedTaxSettingsState();
-  bindFieldListeners();
-  renderValidationMessages(currentValidationState);
-  renderMetrics();
+  replaceWorkingProfile(cloneSampleProfile());
 }
 
 function bindFieldListeners() {
@@ -3671,6 +3725,9 @@ if (typeof module !== "undefined" && module.exports) {
     resolveEffectiveProfile,
     migrateSocialSecurityProfile,
     migrateLegacyIraContributions,
+    inputConfig,
+    TIMELINE_OVERRIDE_FIELDS,
+    OPTIONAL_BLANK_FIELDS,
     SOCIAL_SECURITY_FULL_RETIREMENT_AGE,
   };
 }

@@ -57,9 +57,14 @@
                 <button class="plan-actions-item" id="export-plan-pdf" type="button">Export Retirement Plan PDF</button>
                 <p class="plan-actions-message" id="plan-actions-message" role="status" aria-live="polite" hidden></p>
               </div>
+              <input id="import-workbook-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Choose a WealthMap Planning Workbook (.xlsx) to check" hidden>
             </div>
           </div>
         </header>
+        <div class="workbook-import-banner" id="workbook-import-banner">
+          <p class="workbook-import-status" id="workbook-import-status" role="status" aria-live="polite" hidden></p>
+          <button class="button button-quiet" id="workbook-import-details-button" type="button" aria-haspopup="dialog" hidden>View workbook check details</button>
+        </div>
 
         <div class="page-container">
           <section class="page-view" data-view="readiness" aria-labelledby="readiness-heading">
@@ -489,6 +494,41 @@
         <footer class="app-footer">WealthMap is an educational retirement planning tool, not a tax, legal, or investment advisor. Consult qualified professionals before making important financial decisions.</footer>
       </main>
     </div>
+    <dialog class="workbook-import-dialog import-preview-dialog" id="workbook-import-dialog" aria-labelledby="workbook-import-dialog-title" aria-describedby="workbook-import-dialog-summary">
+      <h2 id="workbook-import-dialog-title">Import Plan Preview</h2>
+      <p id="workbook-import-dialog-summary">Review imported data before replacing your current plan.</p>
+      <dl class="import-preview-stats" id="import-preview-stats"></dl>
+      <section class="import-preview-errors" id="workbook-import-errors-section" hidden>
+        <h3 id="workbook-import-errors-heading" tabindex="-1">Import Validation Errors</h3>
+        <ul id="workbook-import-errors" aria-labelledby="workbook-import-errors-heading"></ul>
+      </section>
+      <section class="import-preview-warnings" id="workbook-import-warnings-section" hidden>
+        <h3 id="workbook-import-warnings-heading">Import Warnings</h3>
+        <ul id="workbook-import-warnings" aria-labelledby="workbook-import-warnings-heading"></ul>
+      </section>
+      <p class="import-preview-overwrite" id="import-preview-overwrite" role="note" hidden>Importing this workbook will replace all current plan inputs with values from the workbook. Calculated outputs will be regenerated after import.</p>
+      <section id="import-preview-impact-section" hidden>
+        <h3>Plan Impact Summary</h3>
+        <ul id="import-preview-impact"></ul>
+      </section>
+      <section id="import-preview-changes-section" hidden>
+        <h3 id="import-preview-changes-heading">Changed Fields</h3>
+        <p id="import-preview-no-changes" hidden>No plan values will change.</p>
+        <ul id="import-preview-changes"></ul>
+      </section>
+      <div id="import-preview-sections" hidden></div>
+      <section id="import-preview-overrides-section" hidden>
+        <h3>Timeline Overrides</h3>
+        <p id="import-preview-no-overrides" hidden>No timeline overrides found.</p>
+        <ul id="import-preview-overrides"></ul>
+      </section>
+      <p class="workbook-import-note" id="workbook-import-dialog-note"></p>
+      <div class="import-preview-actions">
+        <button class="button button-quiet" id="close-workbook-import-dialog" type="button">Close</button>
+        <button class="button button-quiet" id="download-import-validation-report" type="button" hidden>Download Validation Report</button>
+        <button class="button" id="confirm-workbook-import" type="button" hidden>Import Plan</button>
+      </div>
+    </dialog>
     <dialog class="plan-report-dialog" id="plan-report-dialog" aria-labelledby="plan-report-dialog-title">
       <div class="report-dialog-toolbar">
         <div>
@@ -506,6 +546,13 @@
     </dialog>
     <script src="./data.js?v=6"></script>
     <script src="./validation.js?v=2"></script>
-    <script src="./app.js?v=14"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <script src="./app.js?v=17"></script>
+    <script src="./workbook.js?v=2"></script>
+    <script src="./importValidation.js?v=1"></script>
+    <script src="./importPreview.js?v=1"></script>
+    <script src="./importService.js?v=2"></script>
+    <script src="./workbookImport.js?v=5"></script>
+    <script src="./planExport.js?v=1"></script>
   </body>
 </html>
