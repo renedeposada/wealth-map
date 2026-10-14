@@ -52,6 +52,7 @@
               <button class="button" id="plan-actions-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="plan-actions-menu">Plan Actions ▾</button>
               <div class="plan-actions-menu" id="plan-actions-menu" hidden>
                 <button class="plan-actions-item" id="reset-button" type="button">Reset Sample Data</button>
+                <button class="plan-actions-item" id="export-current-plan" type="button">Export Current Plan</button>
                 <button class="plan-actions-item" id="download-workbook" type="button">Download Blank Planning Workbook</button>
                 <button class="plan-actions-item" id="import-workbook" type="button">Import Planning Workbook</button>
                 <button class="plan-actions-item" id="export-plan-pdf" type="button">Export Retirement Plan PDF</button>
@@ -61,6 +62,7 @@
             </div>
           </div>
         </header>
+        <section class="export-validation-summary" id="export-validation-summary" aria-labelledby="export-validation-title" tabindex="-1" hidden></section>
         <div class="workbook-import-banner" id="workbook-import-banner">
           <p class="workbook-import-status" id="workbook-import-status" role="status" aria-live="polite" hidden></p>
           <button class="button button-quiet" id="workbook-import-details-button" type="button" aria-haspopup="dialog" hidden>View workbook check details</button>
@@ -547,12 +549,12 @@
     <script src="./data.js?v=6"></script>
     <script src="./validation.js?v=2"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-    <script src="./app.js?v=17"></script>
-    <script src="./workbook.js?v=2"></script>
+    <script src="./app.js?v=19"></script>
+    <script src="./workbook.js?v=4"></script>
     <script src="./importValidation.js?v=1"></script>
     <script src="./importPreview.js?v=1"></script>
     <script src="./importService.js?v=2"></script>
     <script src="./workbookImport.js?v=5"></script>
-    <script src="./planExport.js?v=1"></script>
+    <script src="./planExport.js?v=2"></script>
   </body>
 </html>

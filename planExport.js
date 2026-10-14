@@ -177,3 +177,215 @@ function validatePlanExportModel(model) {
   }
   return { valid: errors.length === 0, errors };
 }
+
+// ---- Pre-export validation (Step 6) ----
+// validateCurrentPlanForExport() is the single gate before a workbook is built. It reports value-free
+// issues { severity, code, fieldId, section, page, messageKey, age? }; plan values never appear in
+// issues, messages, or logs. Cross-field rules are delegated to PlanSetupValidation (validation.js).
+
+const EXPORT_SUPPORTED_MODEL_VERSIONS = Object.freeze([PLAN_EXPORT_MODEL_VERSION]);
+const EXPORT_MODEL_KEYS = Object.freeze([
+  "modelVersion",
+  ...PLAN_EXPORT_REQUIRED_SECTIONS,
+  "timelineOverrides",
+]);
+const EXPORT_SECTION_PAGES = Object.freeze({
+  profile: "profile",
+  assumptions: "profile",
+  incomeAndExpenses: "cashflow",
+  assets: "assets",
+  timelineOverrides: "timeline",
+  model: "profile",
+});
+const EXPORT_PAGE_ORDER = Object.freeze(["profile", "assets", "cashflow", "timeline"]);
+const EXPORT_PAGE_LABELS = Object.freeze({
+  profile: "Plan Setup",
+  assets: "Assets",
+  cashflow: "Income & Expenses",
+  timeline: "Wealth Timeline",
+});
+
+function exportIssue(severity, code, section, fieldId, extra = {}) {
+  const issue = { severity, code, fieldId: fieldId || null, section, page: EXPORT_SECTION_PAGES[section] || "profile", messageKey: code };
+  if (extra.age !== undefined) issue.age = extra.age;
+  return issue;
+}
+
+function validateCurrentPlanForExport(exportModel, options = {}) {
+  const issues = [];
+  const add = (code, section, fieldId, extra) => issues.push(exportIssue("error", code, section, fieldId, extra));
+  const finish = () => {
+    const seen = new Set();
+    const unique = issues.filter((issue) => {
+      const key = [issue.severity, issue.code, issue.section, issue.fieldId, issue.age].join(":");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const order = options.fieldOrder || [];
+    const rank = (issue) => (order.indexOf(issue.fieldId) === -1 ? order.length : order.indexOf(issue.fieldId));
+    unique.sort(
+      (a, b) =>
+        (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1) ||
+        EXPORT_PAGE_ORDER.indexOf(a.page) - EXPORT_PAGE_ORDER.indexOf(b.page) ||
+        rank(a) - rank(b) ||
+        (a.age ?? -1) - (b.age ?? -1) ||
+        String(a.code).localeCompare(String(b.code)),
+    );
+    const errors = unique.filter((issue) => issue.severity === "error");
+    const warnings = unique.filter((issue) => issue.severity === "warning");
+    const standardFieldCount = model_isObject(exportModel)
+      ? PLAN_EXPORT_REQUIRED_SECTIONS.reduce((n, s) => n + (model_isObject(exportModel[s]) ? Object.keys(exportModel[s]).length : 0), 0)
+      : 0;
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+      summary: {
+        errorCount: errors.length,
+        warningCount: warnings.length,
+        standardFieldCount,
+        timelineOverrideCount: model_isObject(exportModel) && Array.isArray(exportModel.timelineOverrides) ? exportModel.timelineOverrides.length : 0,
+      },
+    };
+  };
+  function model_isObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  if (!model_isObject(exportModel)) {
+    add("missingModel", "model");
+    return finish();
+  }
+  Object.keys(exportModel).forEach((key) => {
+    if (!EXPORT_MODEL_KEYS.includes(key)) add("unexpectedModelKey", "model");
+  });
+  if (exportModel.modelVersion === undefined || exportModel.modelVersion === null) add("missingModelVersion", "model");
+  else if (!EXPORT_SUPPORTED_MODEL_VERSIONS.includes(exportModel.modelVersion)) add("unsupportedModelVersion", "model");
+
+  const schema = (options.schema || buildPlanningWorkbookSchema()).filter((item) => item.worksheet !== WORKBOOK_SHEETS.timeline);
+  const byId = new Map(schema.map((item) => [item.fieldId, item]));
+  const sheetPage = { [WORKBOOK_SHEETS.planSetup]: "profile", [WORKBOOK_SHEETS.assets]: "assets", [WORKBOOK_SHEETS.incomeExpenses]: "cashflow" };
+  const timelineIds = new Set(TIMELINE_OVERRIDE_FIELDS.map((entry) => entry.field));
+  const seenIds = new Map();
+  const failedIds = new Set();
+  const fail = (code, section, fieldId) => {
+    failedIds.add(fieldId);
+    add(code, section, fieldId);
+  };
+
+  PLAN_EXPORT_REQUIRED_SECTIONS.forEach((section) => {
+    const values = exportModel[section];
+    if (!model_isObject(values)) return add("missingSection", section);
+    Object.keys(values).forEach((fieldId) => {
+      if (seenIds.has(fieldId)) fail("duplicateField", section, fieldId);
+      seenIds.set(fieldId, section);
+      if (workbookFieldIdIsProhibited(fieldId)) return fail("prohibitedField", section, fieldId);
+      if (timelineIds.has(fieldId)) return fail("timelineFieldInStandardSection", section, fieldId);
+      const item = byId.get(fieldId);
+      if (!item) return fail("unknownField", section, fieldId);
+      if (sheetPage[item.worksheet] !== EXPORT_SECTION_PAGES[section]) return fail("wrongSection", section, fieldId);
+      const value = values[fieldId];
+      if (value === null || value === undefined || value === "") {
+        if (item.required) fail("missingRequired", section, fieldId);
+        return;
+      }
+      if (item.dataType === "select") {
+        if (!(item.allowedValues || []).some((entry) => entry.value === value)) fail("invalidSelection", section, fieldId);
+      } else if (item.dataType === "text") {
+        if (typeof value !== "string") fail("notText", section, fieldId);
+      } else if (typeof value !== "number" || !Number.isFinite(value)) {
+        fail("notFiniteNumber", section, fieldId);
+      } else if (item.dataType === "integer" && !Number.isInteger(value)) {
+        fail("notInteger", section, fieldId);
+      } else if (value < (item.minimum ?? 0)) {
+        fail("belowMinimum", section, fieldId);
+      } else if (item.dataType === "percent" && value > 1) {
+        fail("percentOutOfRange", section, fieldId);
+      }
+    });
+  });
+  REQUIRED_INPUT_IDS.forEach((fieldId) => {
+    if (!seenIds.has(fieldId) && PLAN_EXPORT_REQUIRED_SECTIONS.every((s) => model_isObject(exportModel[s]))) {
+      const item = byId.get(fieldId);
+      add("missingRequired", item ? Object.keys(EXPORT_SECTION_PAGES).find((s) => EXPORT_SECTION_PAGES[s] === sheetPage[item.worksheet]) : "profile", fieldId);
+    }
+  });
+
+  // Cross-field rules reuse the application's own validator on a profile rebuilt from the model.
+  if (PLAN_EXPORT_REQUIRED_SECTIONS.every((s) => model_isObject(exportModel[s])) && typeof PlanSetupValidation !== "undefined") {
+    const profile = {};
+    PLAN_EXPORT_REQUIRED_SECTIONS.forEach((section) =>
+      Object.keys(exportModel[section]).forEach((fieldId) => {
+        if (!failedIds.has(fieldId) && !fieldId.startsWith("assets.")) importPathSet(profile, fieldId, exportModel[section][fieldId]);
+      }),
+    );
+    const erroredFields = new Set(issues.map((issue) => issue.fieldId));
+    PlanSetupValidation.validatePlanSetup(profile).blockingErrors.forEach((entry) => {
+      const item = byId.get(entry.field);
+      if (!item || erroredFields.has(entry.field)) return;
+      const section = Object.keys(exportModel).find((s) => model_isObject(exportModel[s]) && entry.field in exportModel[s]) || "profile";
+      add("crossFieldRule", section, entry.field);
+    });
+  }
+
+  if (!Array.isArray(exportModel.timelineOverrides)) {
+    add("missingSection", "timelineOverrides");
+  } else {
+    const limits = Object.fromEntries(TIMELINE_OVERRIDE_FIELDS.map((entry) => [entry.field, entry.min]));
+    const seen = new Set();
+    exportModel.timelineOverrides.forEach((record) => {
+      if (!model_isObject(record)) return add("invalidOverrideRecord", "timelineOverrides");
+      const field = typeof record.field === "string" ? record.field : null;
+      const age = Number.isInteger(record.age) ? record.age : undefined;
+      if (age === undefined) return add("invalidOverrideAge", "timelineOverrides", field);
+      if (age < WORKBOOK_LAYOUT.timelineMinAge || age > WORKBOOK_LAYOUT.timelineMaxAge) return add("overrideAgeOutOfRange", "timelineOverrides", field, { age });
+      if (!field || !(field in limits)) return add("unsupportedOverrideField", "timelineOverrides", field, { age });
+      if (typeof record.value !== "number" || !Number.isFinite(record.value)) return add("invalidOverrideValue", "timelineOverrides", field, { age });
+      if (record.value < limits[field]) return add("overrideBelowMinimum", "timelineOverrides", field, { age });
+      const key = `${age}:${field}`;
+      if (seen.has(key)) add("duplicateOverride", "timelineOverrides", field, { age });
+      seen.add(key);
+    });
+  }
+  return finish();
+}
+
+const EXPORT_ISSUE_TEXT = Object.freeze({
+  missingModel: "The plan could not be read.",
+  unexpectedModelKey: "The plan contains an unsupported section.",
+  missingModelVersion: "The plan data version is missing.",
+  unsupportedModelVersion: "The plan data version is not supported.",
+  missingSection: "A required part of the plan is missing.",
+  duplicateField: "is listed more than once.",
+  prohibitedField: "is a calculated value and cannot be exported.",
+  timelineFieldInStandardSection: "belongs on the Wealth Timeline, not here.",
+  unknownField: "is not a supported workbook field.",
+  wrongSection: "is not in the expected place.",
+  missingRequired: "is required.",
+  invalidSelection: "must be one of the available choices.",
+  notText: "must be text.",
+  notFiniteNumber: "must be a valid number.",
+  notInteger: "must be a whole number.",
+  belowMinimum: "is below the allowed minimum.",
+  percentOutOfRange: "must be between 0% and 100%.",
+  crossFieldRule: "conflicts with other plan settings. Review it on its page.",
+  invalidOverrideRecord: "A Wealth Timeline override is not valid.",
+  invalidOverrideAge: "A Wealth Timeline override has an invalid age.",
+  overrideAgeOutOfRange: "has an override at an age outside the supported range.",
+  unsupportedOverrideField: "A Wealth Timeline override uses an unsupported field.",
+  invalidOverrideValue: "has an override that is not a valid number.",
+  overrideBelowMinimum: "has an override below the allowed minimum.",
+  duplicateOverride: "has more than one override for the same age.",
+});
+
+// Friendly, value-free message for an issue. Uses the field's label when the field is supported.
+function exportValidationIssueMessage(issue) {
+  const text = EXPORT_ISSUE_TEXT[issue && issue.messageKey] || "This item needs review.";
+  if (!issue || !issue.fieldId || !/^(?:[a-z])/.test(text)) return text;
+  const timeline = TIMELINE_OVERRIDE_FIELDS.find((entry) => entry.field === issue.fieldId);
+  const item = timeline ? null : buildSupportedInputInventory().find((entry) => entry.fieldId === issue.fieldId);
+  const label = timeline ? timeline.label : item ? item.label : "A field";
+  const age = issue.age !== undefined ? ` (age ${issue.age})` : "";
+  return `${label}${age} ${text}`;
+}

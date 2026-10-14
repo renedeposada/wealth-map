@@ -479,8 +479,13 @@ function buildWorkbookTimelineOverrideMap(schema = buildPlanningWorkbookSchema()
     .forEach((entry, entryIndex) => {
       columns[entry.fieldId.replace("timelineOverrides.", "")] = workbookTimelineColumnNumber(entryIndex);
     });
+  const columnsByFieldId = new Map(
+    Object.entries(columns).map(([field, column]) => [`timelineOverrides.${field}`, column]),
+  );
   return {
     worksheet: WORKBOOK_SHEETS.timeline,
+    columnsByFieldId,
+    headerRow: WORKBOOK_LAYOUT.timelineHeaderRow,
     ageColumn: WORKBOOK_TIMELINE_AGE_COLUMN,
     returnPercentColumn: columns.returnPercent,
     incomeColumn: columns.income,
@@ -655,24 +660,268 @@ function createWorkbookStructure(excelApi, schema) {
   return workbook;
 }
 
-// Insertion point for Step 3: write exportModel input values into the Value cells in fieldLocations.
-function populateWorkbookInputs(workbook, exportModel, fieldLocations) {
-  return workbook;
+const WORKBOOK_STANDARD_EXPORT_SECTIONS = Object.freeze([
+  "profile",
+  "assumptions",
+  "incomeAndExpenses",
+  "assets",
+]);
+
+// Flattens the four standard export sections into one fieldId -> value map (never timelineOverrides).
+// Own properties only; a field id present in more than one section is reported via `duplicates`
+// (an array of field ids, never values) and left out of the map so it is never written.
+function collectStandardExportFields(exportModel, duplicates = []) {
+  const fields = Object.create(null);
+  const seen = new Set();
+  const repeated = new Set();
+  WORKBOOK_STANDARD_EXPORT_SECTIONS.forEach((section) => {
+    const values = exportModel && exportModel[section];
+    if (!values || typeof values !== "object" || Array.isArray(values)) return;
+    Object.entries(values).forEach(([fieldId, value]) => {
+      if (seen.has(fieldId)) {
+        repeated.add(fieldId);
+        return;
+      }
+      seen.add(fieldId);
+      fields[fieldId] = value;
+    });
+  });
+  repeated.forEach((fieldId) => {
+    delete fields[fieldId];
+    duplicates.push(fieldId);
+  });
+  return fields;
 }
 
-// Insertion point for Step 4: write exportModel timeline overrides using timelineMap columns.
-function populateWorkbookTimelineOverrides(workbook, exportModel, timelineMap) {
-  return workbook;
+// Returns the dropdown label for an internal select value, or undefined when it cannot be resolved.
+function workbookSelectLabel(schemaEntry, internalValue) {
+  const option = (schemaEntry.allowedValues || []).find((entry) => entry.value === internalValue);
+  return option ? option.label : undefined;
+}
+
+// Converts an internal value to its workbook cell value. Returns { value } or { error: code };
+// the error never carries the value itself. Blank (null/undefined) becomes a blank cell.
+function toWorkbookExportValue(value, schemaEntry) {
+  if (value === null || value === undefined) return { value: null };
+  switch (schemaEntry.dataType) {
+    case "text":
+      return typeof value === "string" ? { value } : { error: "INVALID_EXPORT_VALUE" };
+    case "select": {
+      if (typeof value !== "string" && typeof value !== "number") return { error: "INVALID_EXPORT_VALUE" };
+      const label = workbookSelectLabel(schemaEntry, value);
+      return label === undefined ? { error: "UNRESOLVED_SELECT_VALUE" } : { value: label };
+    }
+    case "integer":
+      return Number.isInteger(value) ? { value } : { error: "INVALID_EXPORT_VALUE" };
+    case "currency":
+    case "number":
+    case "percent":
+      // Standard percentages are decimals internally and in Excel (excelToInternalMultiplier is 1).
+      return typeof value === "number" && Number.isFinite(value)
+        ? { value: value / schemaEntry.excelToInternalMultiplier }
+        : { error: "INVALID_EXPORT_VALUE" };
+    default:
+      return { error: "INVALID_EXPORT_VALUE" };
+  }
+}
+
+// Writes standard (non-Timeline) export values into their Value cells. Only cell values are
+// assigned, so number formats, validations and styles are untouched. Returns
+// { populatedFieldIds, blankFieldIds, errors } where errors hold { code, fieldId, worksheet? } only.
+function populateWorkbookInputs(
+  workbook,
+  exportModel,
+  fieldLocationIndex = buildWorkbookFieldLocationIndex(),
+  schema = buildPlanningWorkbookSchema(),
+) {
+  const result = { populatedFieldIds: [], blankFieldIds: [], errors: [] };
+  const fail = (code, fieldId, worksheet) =>
+    result.errors.push(worksheet ? { code, fieldId, worksheet } : { code, fieldId });
+  const duplicates = [];
+  const fields = collectStandardExportFields(exportModel, duplicates);
+  duplicates.forEach((fieldId) => fail("DUPLICATE_EXPORT_FIELD", fieldId));
+  const schemaById = new Map(schema.map((entry) => [entry.fieldId, entry]));
+
+  Object.keys(fields).forEach((fieldId) => {
+    if (workbookFieldIdIsProhibited(fieldId)) return fail("PROHIBITED_EXPORT_FIELD", fieldId);
+    const entry = schemaById.get(fieldId);
+    if (!entry || entry.classification !== "input") return fail("UNKNOWN_EXPORT_FIELD", fieldId);
+    if (entry.worksheet === WORKBOOK_SHEETS.timeline) {
+      return fail("TIMELINE_FIELD_IN_STANDARD_EXPORT", fieldId, entry.worksheet);
+    }
+    const location = Object.prototype.hasOwnProperty.call(fieldLocationIndex, fieldId)
+      ? fieldLocationIndex[fieldId]
+      : undefined;
+    const sheet = location && workbook.getWorksheet(location.worksheet);
+    if (!sheet) return fail("MISSING_WORKBOOK_LOCATION", fieldId, entry.worksheet);
+    const converted = toWorkbookExportValue(fields[fieldId], entry);
+    if (converted.error) return fail(converted.error, fieldId, entry.worksheet);
+    sheet.getCell(location.row, location.column).value = converted.value;
+    (converted.value === null ? result.blankFieldIds : result.populatedFieldIds).push(fieldId);
+  });
+  return result;
+}
+
+function timelineExportFieldId(field) {
+  return `timelineOverrides.${field}`;
+}
+
+// Resolves age -> worksheet row by reading the generated age column (never by arithmetic), so an
+// age is only writable when it maps to exactly one existing row.
+function workbookTimelineRowsByAge(sheet, timelineMap) {
+  const rows = new Map();
+  const duplicates = new Set();
+  for (let row = timelineMap.firstAgeRow; row <= sheet.rowCount; row += 1) {
+    const age = sheet.getCell(row, timelineMap.ageColumn).value;
+    if (typeof age !== "number") continue;
+    if (rows.has(age)) duplicates.add(age);
+    else rows.set(age, row);
+  }
+  return { rows, duplicates };
+}
+
+// Converts an internal Timeline value to Excel units using the schema multiplier
+// (returnPercent: percentage points -> decimal fraction). Returns { value } or { error }.
+function toTimelineWorkbookValue(value, schemaEntry) {
+  const multiplier = schemaEntry.excelToInternalMultiplier ?? 1;
+  if (typeof multiplier !== "number" || !Number.isFinite(multiplier) || multiplier <= 0) {
+    return { error: "INVALID_TIMELINE_MULTIPLIER" };
+  }
+  const converted = value / multiplier;
+  return Number.isFinite(converted) ? { value: converted } : { error: "INVALID_TIMELINE_VALUE" };
+}
+
+// Validates every override record first, then writes all of them; nothing is written if any record
+// is invalid. Only cell values are assigned. Result: { populated, skipped, errors } with metadata
+// only (age, fieldId, code), never override values.
+function populateWorkbookTimelineOverrides(
+  workbook,
+  exportModel,
+  timelineMap = buildWorkbookTimelineOverrideMap(),
+  schema = buildPlanningWorkbookSchema(),
+) {
+  const result = { populated: [], skipped: [], errors: [] };
+  const records = exportModel ? exportModel.timelineOverrides : undefined;
+  if (records === undefined || records === null) return result;
+  if (!Array.isArray(records)) {
+    result.errors.push({ code: "INVALID_TIMELINE_EXPORT_MODEL" });
+    return result;
+  }
+  const sheet = workbook.getWorksheet(timelineMap.worksheet);
+  if (!sheet) {
+    result.errors.push({ code: "MISSING_TIMELINE_AGE_ROW", worksheet: timelineMap.worksheet });
+    return result;
+  }
+  const schemaById = new Map(schema.map((entry) => [entry.fieldId, entry]));
+  const { rows, duplicates } = workbookTimelineRowsByAge(sheet, timelineMap);
+  const prepared = [];
+  const seenRecords = new Set();
+  const seenCells = new Set();
+
+  records.forEach((record) => {
+    const fail = (code, age, fieldId) => {
+      const error = { code };
+      if (typeof age === "number" && Number.isFinite(age)) error.age = age;
+      if (typeof fieldId === "string") error.fieldId = fieldId;
+      result.errors.push(error);
+    };
+    if (!record || typeof record !== "object" || Array.isArray(record)) return fail("INVALID_TIMELINE_RECORD");
+    const { age, field, value } = record;
+    const fieldId = typeof field === "string" ? timelineExportFieldId(field) : undefined;
+    if (typeof age !== "number" || !Number.isFinite(age) || !Number.isInteger(age)) {
+      return fail("INVALID_TIMELINE_AGE", undefined, fieldId);
+    }
+    if (age < timelineMap.minAge || age > timelineMap.maxAge) {
+      return fail("TIMELINE_AGE_OUT_OF_RANGE", age, fieldId);
+    }
+    if (!fieldId || !TIMELINE_OVERRIDE_FIELDS.some((entry) => entry.field === field)) {
+      return fail("UNSUPPORTED_TIMELINE_FIELD", age, fieldId);
+    }
+    if (workbookFieldIdIsProhibited(fieldId)) return fail("PROHIBITED_TIMELINE_FIELD", age, fieldId);
+    const entry = schemaById.get(fieldId);
+    if (!entry || entry.worksheet !== WORKBOOK_SHEETS.timeline || entry.classification !== "input") {
+      return fail("MISSING_TIMELINE_SCHEMA_ENTRY", age, fieldId);
+    }
+    const recordKey = `${age}:${fieldId}`;
+    if (seenRecords.has(recordKey)) return fail("DUPLICATE_TIMELINE_OVERRIDE", age, fieldId);
+    seenRecords.add(recordKey);
+    if (value === null || value === undefined) {
+      result.skipped.push({ age, fieldId });
+      return undefined;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) return fail("INVALID_TIMELINE_VALUE", age, fieldId);
+    if (typeof entry.minimum === "number" && value < entry.minimum) {
+      return fail("TIMELINE_VALUE_BELOW_MINIMUM", age, fieldId);
+    }
+    if (duplicates.has(age)) return fail("DUPLICATE_TIMELINE_AGE_ROW", age, fieldId);
+    const row = rows.get(age);
+    if (row === undefined) return fail("MISSING_TIMELINE_AGE_ROW", age, fieldId);
+    const column = timelineMap.columnsByFieldId.get(fieldId);
+    if (column === undefined) return fail("MISSING_TIMELINE_COLUMN", age, fieldId);
+    const converted = toTimelineWorkbookValue(value, entry);
+    if (converted.error) return fail(converted.error, age, fieldId);
+    const cellKey = `${timelineMap.worksheet}:${row}:${column}`;
+    if (seenCells.has(cellKey)) return fail("DUPLICATE_TIMELINE_DESTINATION", age, fieldId);
+    seenCells.add(cellKey);
+    prepared.push({ age, fieldId, row, column, workbookValue: converted.value });
+    return undefined;
+  });
+
+  if (result.errors.length) return result;
+  prepared.forEach((write) => {
+    sheet.getCell(write.row, write.column).value = write.workbookValue;
+    result.populated.push({ age: write.age, fieldId: write.fieldId });
+  });
+  return result;
+}
+
+// Errors carry a machine-readable code and a message that never includes plan values.
+function createSafeExportError(code, message = "WealthMap workbook export failed.") {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+// Build metadata kept off the workbook itself (and out of the exported file).
+const workbookPopulationResults = new WeakMap();
+const workbookTimelinePopulationResults = new WeakMap();
+function getWorkbookPopulationResult(workbook) {
+  return workbookPopulationResults.get(workbook);
+}
+function getWorkbookTimelinePopulationResult(workbook) {
+  return workbookTimelinePopulationResults.get(workbook);
 }
 
 function createPlanningWorkbook(options = {}) {
   const { populate = false, exportModel, excelApi = globalThis.ExcelJS } = options;
-  if (populate && !exportModel) throw new Error("An export model is required to populate the workbook.");
+  if (populate && !exportModel) {
+    throw createSafeExportError("INVALID_EXPORT_MODEL", "An export model is required to populate the workbook.");
+  }
   const schema = buildPlanningWorkbookSchema();
   const workbook = createWorkbookStructure(excelApi, schema);
   if (populate) {
-    populateWorkbookInputs(workbook, exportModel, buildWorkbookFieldLocationIndex(schema));
-    populateWorkbookTimelineOverrides(workbook, exportModel, buildWorkbookTimelineOverrideMap(schema));
+    const result = populateWorkbookInputs(
+      workbook,
+      exportModel,
+      buildWorkbookFieldLocationIndex(schema),
+      schema,
+    );
+    workbookPopulationResults.set(workbook, result);
+    if (result.errors.length) {
+      const codes = [...new Set(result.errors.map((error) => error.code))].join(", ");
+      throw createSafeExportError("STANDARD_POPULATION_FAILED", `Workbook population failed (${result.errors.length} issue(s): ${codes}).`);
+    }
+    const timelineResult = populateWorkbookTimelineOverrides(
+      workbook,
+      exportModel,
+      buildWorkbookTimelineOverrideMap(schema),
+      schema,
+    );
+    workbookTimelinePopulationResults.set(workbook, timelineResult);
+    if (timelineResult.errors.length) {
+      const codes = [...new Set(timelineResult.errors.map((error) => error.code))].join(", ");
+      throw createSafeExportError("TIMELINE_POPULATION_FAILED", `Workbook timeline population failed (${timelineResult.errors.length} issue(s): ${codes}).`);
+    }
   }
   return workbook;
 }
@@ -875,18 +1124,85 @@ function formatCalculatedOutputAudit(audit) {
   ].join("\n");
 }
 
-async function downloadBlankPlanningWorkbook() {
-  const workbook = buildBlankPlanningWorkbook();
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
+const WORKBOOK_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+// Shared low-level browser download used by the blank and current-plan workflows.
+async function downloadExcelWorkbook(workbook, filename) {
+  let buffer;
+  try {
+    buffer = await workbook.xlsx.writeBuffer();
+  } catch {
+    throw createSafeExportError("WORKBOOK_SERIALIZATION_FAILED");
+  }
   const link = document.createElement("a");
-  link.href = url;
-  link.download = WORKBOOK_FILENAME;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  let url = null;
+  try {
+    url = URL.createObjectURL(new Blob([buffer], { type: WORKBOOK_MIME_TYPE }));
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+  } catch {
+    throw createSafeExportError("DOWNLOAD_TRIGGER_FAILED");
+  } finally {
+    link.remove();
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+async function downloadBlankPlanningWorkbook() {
+  await downloadExcelWorkbook(buildBlankPlanningWorkbook(), WORKBOOK_FILENAME);
+}
+
+// Local calendar date, independent of locale.
+function workbookDateStamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// Deliberately independent of the plan contents (no name, balances, or status in the filename).
+function currentPlanWorkbookFilename(profile, date = new Date()) {
+  return `WealthMap_Current_Plan_${workbookDateStamp(date)}.xlsx`;
+}
+
+// Exports the supplied (current) plan as a populated workbook download. Throws errors that carry a
+// safe `code`; messages and codes never include plan values.
+// Confirms population produced no errors. Throws a safe error without plan values.
+function validateWorkbookPopulationResult(workbook) {
+  if (!workbook || !workbook.xlsx || typeof workbook.xlsx.writeBuffer !== "function") {
+    throw createSafeExportError("INVALID_WORKBOOK_BUILD_RESULT");
+  }
+  const standard = getWorkbookPopulationResult(workbook);
+  const timeline = getWorkbookTimelinePopulationResult(workbook);
+  if (standard && standard.errors.length) throw createSafeExportError("STANDARD_POPULATION_FAILED");
+  if (timeline && timeline.errors.length) throw createSafeExportError("TIMELINE_POPULATION_FAILED");
+}
+
+// Validates the plan, then exports it. Resolves { status, validation }: "downloaded", "invalid"
+// (nothing was built), or "warnings" (nothing built until called again with allowWarnings).
+// Throws errors that carry a safe `code`; messages and codes never include plan values.
+async function downloadCurrentPlanWorkbook(profile = currentWorkingProfile(), options = {}) {
+  if (!profile || typeof profile !== "object") throw createSafeExportError("MISSING_CURRENT_PROFILE");
+  if (!globalThis.ExcelJS) throw createSafeExportError("WORKBOOK_LIBRARY_UNAVAILABLE");
+  let exportModel;
+  let validation;
+  try {
+    exportModel = buildPlanExportModel(profile);
+    validation = validateCurrentPlanForExport(exportModel);
+  } catch {
+    throw createSafeExportError("EXPORT_MODEL_BUILD_FAILED");
+  }
+  if (!validation.isValid) return { status: "invalid", validation };
+  if (validation.warnings.length && !options.allowWarnings) return { status: "warnings", validation };
+  let workbook;
+  try {
+    workbook = buildExportWorkbook(exportModel);
+  } catch (error) {
+    throw error && error.code ? error : createSafeExportError("WORKBOOK_BUILD_FAILED");
+  }
+  validateWorkbookPopulationResult(workbook);
+  await downloadExcelWorkbook(workbook, currentPlanWorkbookFilename(profile));
+  return { status: "downloaded", validation };
 }

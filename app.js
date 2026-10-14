@@ -3260,6 +3260,7 @@ function renderMetrics() {
       ? PlanSetupValidation.validatePlanSetup(workingProfile)
       : { blockingErrors: [], warnings: [], isValid: true };
   currentValidationState = validation;
+  updateCurrentPlanExportAvailability();
 
   if (!validation.isValid) {
     $("#export-plan-pdf").disabled = true;
@@ -3412,6 +3413,7 @@ function updateWorkingValue(field, rawValue, type) {
 
   if (!validation.isValid) {
     currentValidationState = validation;
+    updateCurrentPlanExportAvailability();
     renderValidationMessages(validation);
     renderReadinessScoreFactors(null);
     renderReadinessRecommendationsCallToAction(null, []);
@@ -3539,6 +3541,156 @@ function showPlanActionsMessage(text) {
   message.hidden = false;
 }
 
+let currentPlanExportInProgress = false;
+const EXPORT_BUTTON_LABEL = "Export Current Plan";
+
+function updateCurrentPlanExportAvailability() {
+  const button = $("#export-current-plan");
+  if (!button) return;
+  const unavailable = currentPlanExportInProgress;
+  button.disabled = unavailable;
+  button.setAttribute("aria-disabled", String(unavailable));
+}
+
+function showWorkbookExportStatus(text) {
+  const status = $("#workbook-import-status");
+  if (!status) return;
+  status.textContent = text;
+  status.hidden = false;
+}
+
+function currentPlanExportFailureMessage(error) {
+  const code = error && error.code;
+  if (code === "WORKBOOK_LIBRARY_UNAVAILABLE") {
+    return "Excel export is unavailable right now. Please refresh the page and try again.";
+  }
+  if (typeof code === "string" && /POPULATION|BUILD_RESULT|WORKBOOK_BUILD/.test(code)) {
+    return "WealthMap could not prepare the Excel workbook. Please try again.";
+  }
+  return "Current plan export failed. Please review your plan and try again.";
+}
+
+const EXPORT_SUMMARY_MAX_ISSUES = 10;
+
+function hideExportValidationSummary() {
+  const summary = $("#export-validation-summary");
+  if (summary) summary.hidden = true;
+}
+
+// Shows value-free validation issues (messages come from labels, never plan values).
+// `onConfirm` is only supplied when there are warnings but no errors.
+function showExportValidationSummary(validation, onConfirm) {
+  const summary = $("#export-validation-summary");
+  if (!summary) return;
+  const hasErrors = validation.errors.length > 0;
+  const issues = [...validation.errors, ...validation.warnings];
+  const count = hasErrors ? validation.errors.length : validation.warnings.length;
+  const noun = hasErrors ? "issue" : "warning";
+  summary.replaceChildren();
+  const heading = document.createElement("h2");
+  heading.id = "export-validation-title";
+  heading.tabIndex = -1;
+  heading.textContent = hasErrors ? "Review your plan before exporting." : "Review before exporting.";
+  const intro = document.createElement("p");
+  intro.textContent = hasErrors
+    ? `${count} ${noun}${count === 1 ? "" : "s"} must be fixed before the plan can be exported to Excel.`
+    : `${count} ${noun}${count === 1 ? "" : "s"} found. You can export anyway or review your plan first.`;
+  const list = document.createElement("ul");
+  issues.slice(0, EXPORT_SUMMARY_MAX_ISSUES).forEach((issue) => {
+    const item = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = `${issue.severity === "error" ? "Error" : "Warning"}: ${exportValidationIssueMessage(issue)} `;
+    item.append(text);
+    if (pageTitles[issue.page]) {
+      const go = document.createElement("button");
+      go.type = "button";
+      go.className = "button button-quiet";
+      go.textContent = `Review ${pageTitles[issue.page][1]}`;
+      go.addEventListener("click", () => {
+        hideExportValidationSummary();
+        showPage(issue.page);
+      });
+      item.append(go);
+    }
+    list.append(item);
+  });
+  summary.append(heading, intro, list);
+  if (issues.length > EXPORT_SUMMARY_MAX_ISSUES) {
+    const more = document.createElement("p");
+    const extra = issues.length - EXPORT_SUMMARY_MAX_ISSUES;
+    more.textContent = `${extra} additional ${extra === 1 ? "issue" : "issues"} not shown.`;
+    summary.append(more);
+  }
+  const actions = document.createElement("div");
+  if (onConfirm) {
+    const confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.className = "button";
+    confirm.textContent = "Export Anyway";
+    confirm.addEventListener("click", () => {
+      hideExportValidationSummary();
+      onConfirm();
+    });
+    actions.append(confirm);
+  }
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "button button-quiet";
+  close.textContent = onConfirm ? "Review Plan" : "Close";
+  close.addEventListener("click", hideExportValidationSummary);
+  actions.append(close);
+  summary.append(actions);
+  summary.hidden = false;
+  heading.focus();
+}
+
+async function exportCurrentPlanFromMenu(options = {}) {
+  if (currentPlanExportInProgress) return;
+  const button = $("#export-current-plan");
+  const menuButton = $("#plan-actions-button");
+  $("#plan-actions-message").hidden = true;
+  hideExportValidationSummary();
+  currentPlanExportInProgress = true;
+  button.textContent = "Exporting...";
+  button.setAttribute("aria-busy", "true");
+  updateCurrentPlanExportAvailability();
+  let failed = false;
+  let shownSummary = false;
+  try {
+    // Read at click time so the export reflects the plan as it is now.
+    const result = await downloadCurrentPlanWorkbook(currentWorkingProfile(), options);
+    if (result.status === "downloaded") {
+      showWorkbookExportStatus("Current plan Excel download started.");
+    } else {
+      shownSummary = true;
+      closePlanActions();
+      showExportValidationSummary(
+        result.validation,
+        result.status === "warnings" ? () => exportCurrentPlanFromMenu({ allowWarnings: true }) : null,
+      );
+    }
+  } catch (error) {
+    failed = true;
+    // Only a safe code is logged; never the plan, export model, or workbook.
+    console.error("[WealthMap export]", {
+      event: "currentPlanExportFailed",
+      code: (error && error.code) || "EXPORT_FAILED",
+    });
+    showPlanActionsMessage(currentPlanExportFailureMessage(error));
+  } finally {
+    currentPlanExportInProgress = false;
+    button.textContent = EXPORT_BUTTON_LABEL;
+    button.setAttribute("aria-busy", "false");
+    updateCurrentPlanExportAvailability();
+  }
+  if (failed) {
+    button.focus();
+  } else if (!shownSummary) {
+    closePlanActions();
+    menuButton.focus();
+  }
+}
+
 function bindPlanActions() {
   const button = $("#plan-actions-button");
   const menu = $("#plan-actions-menu");
@@ -3550,6 +3702,11 @@ function bindPlanActions() {
     button.setAttribute("aria-expanded", String(open));
   });
   menu.addEventListener("click", (event) => event.stopPropagation());
+  $("#export-current-plan").addEventListener("click", (event) => {
+    event.stopPropagation();
+    return exportCurrentPlanFromMenu();
+  });
+  updateCurrentPlanExportAvailability();
   $("#download-workbook").addEventListener("click", async (event) => {
     event.stopPropagation();
     try {
