@@ -431,6 +431,68 @@ function workbookDataValidation(entry) {
   return undefined;
 }
 
+// Layout arithmetic shared by worksheet generation and the field/timeline location maps so the two
+// can never drift apart.
+const WORKBOOK_INPUT_VALUE_COLUMN = 3;
+const WORKBOOK_TIMELINE_AGE_COLUMN = 1;
+
+function workbookInputRowNumber(entryIndex) {
+  return WORKBOOK_LAYOUT.inputHeaderRow + 1 + entryIndex;
+}
+
+function workbookTimelineRowNumber(age) {
+  return WORKBOOK_LAYOUT.timelineHeaderRow + 1 + age - WORKBOOK_LAYOUT.timelineMinAge;
+}
+
+function workbookTimelineColumnNumber(entryIndex) {
+  return WORKBOOK_TIMELINE_AGE_COLUMN + 1 + entryIndex;
+}
+
+function workbookInputSheetNames() {
+  return [WORKBOOK_SHEETS.planSetup, WORKBOOK_SHEETS.assets, WORKBOOK_SHEETS.incomeExpenses];
+}
+
+// Maps every standard input fieldId to its Value cell: { worksheet, row, column }. Derived from the
+// schema; excludes timeline columns, read-only/calculated values, and instruction rows.
+function buildWorkbookFieldLocationIndex(schema = buildPlanningWorkbookSchema()) {
+  const index = {};
+  workbookInputSheetNames().forEach((name) => {
+    schema
+      .filter((entry) => entry.worksheet === name)
+      .forEach((entry, entryIndex) => {
+        if (entry.classification !== "input") return;
+        index[entry.fieldId] = {
+          worksheet: name,
+          row: workbookInputRowNumber(entryIndex),
+          column: WORKBOOK_INPUT_VALUE_COLUMN,
+        };
+      });
+  });
+  return index;
+}
+
+// Describes the Timeline Overrides sheet: column per override field plus the age-row geometry.
+function buildWorkbookTimelineOverrideMap(schema = buildPlanningWorkbookSchema()) {
+  const columns = {};
+  schema
+    .filter((entry) => entry.worksheet === WORKBOOK_SHEETS.timeline)
+    .forEach((entry, entryIndex) => {
+      columns[entry.fieldId.replace("timelineOverrides.", "")] = workbookTimelineColumnNumber(entryIndex);
+    });
+  return {
+    worksheet: WORKBOOK_SHEETS.timeline,
+    ageColumn: WORKBOOK_TIMELINE_AGE_COLUMN,
+    returnPercentColumn: columns.returnPercent,
+    incomeColumn: columns.income,
+    expensesColumn: columns.expenses,
+    extraCashNeedColumn: columns.extraCashNeed,
+    extraWithdrawalColumn: columns.extraWithdrawal,
+    firstAgeRow: workbookTimelineRowNumber(WORKBOOK_LAYOUT.timelineMinAge),
+    minAge: WORKBOOK_LAYOUT.timelineMinAge,
+    maxAge: WORKBOOK_LAYOUT.timelineMaxAge,
+  };
+}
+
 function createInstructionsWorksheet(workbook) {
   const sheet = workbook.addWorksheet(WORKBOOK_SHEETS.instructions);
   const styles = workbookStyles();
@@ -481,7 +543,7 @@ function createInputWorksheet(workbook, name, entries) {
   });
 
   entries.forEach((entry, index) => {
-    const rowNumber = headerRow + 1 + index;
+    const rowNumber = workbookInputRowNumber(index);
     [entry.section, entry.label, null, entry.format, entry.description, entry.fieldId].forEach(
       (value, columnIndex) => {
         const cell = sheet.getCell(rowNumber, columnIndex + 1);
@@ -546,7 +608,7 @@ function createTimelineOverridesWorksheet(workbook, timelineEntries) {
     age <= WORKBOOK_LAYOUT.timelineMaxAge;
     age += 1
   ) {
-    const rowNumber = WORKBOOK_LAYOUT.timelineHeaderRow + 1 + age - WORKBOOK_LAYOUT.timelineMinAge;
+    const rowNumber = workbookTimelineRowNumber(age);
     const ageCell = sheet.getCell(rowNumber, 1);
     ageCell.value = age;
     ageCell.numFmt = "0";
@@ -571,27 +633,56 @@ function createTimelineOverridesWorksheet(workbook, timelineEntries) {
   return sheet;
 }
 
-function buildBlankPlanningWorkbook(excelApi = globalThis.ExcelJS) {
+// Structure only: sheets, headings, formatting, validations, and Field IDs. Never writes values.
+function createWorkbookStructure(excelApi, schema) {
   if (!excelApi) throw new Error("Workbook library unavailable.");
-  const schema = buildPlanningWorkbookSchema();
   const workbook = new excelApi.Workbook();
   workbook.creator = "WealthMap";
   workbook.lastModifiedBy = "WealthMap";
   workbook.title = WORKBOOK_TYPE;
   createInstructionsWorksheet(workbook);
-  [WORKBOOK_SHEETS.planSetup, WORKBOOK_SHEETS.assets, WORKBOOK_SHEETS.incomeExpenses].forEach(
-    (name) =>
-      createInputWorksheet(
-        workbook,
-        name,
-        schema.filter((entry) => entry.worksheet === name),
-      ),
+  workbookInputSheetNames().forEach((name) =>
+    createInputWorksheet(
+      workbook,
+      name,
+      schema.filter((entry) => entry.worksheet === name),
+    ),
   );
   createTimelineOverridesWorksheet(
     workbook,
     schema.filter((entry) => entry.worksheet === WORKBOOK_SHEETS.timeline),
   );
   return workbook;
+}
+
+// Insertion point for Step 3: write exportModel input values into the Value cells in fieldLocations.
+function populateWorkbookInputs(workbook, exportModel, fieldLocations) {
+  return workbook;
+}
+
+// Insertion point for Step 4: write exportModel timeline overrides using timelineMap columns.
+function populateWorkbookTimelineOverrides(workbook, exportModel, timelineMap) {
+  return workbook;
+}
+
+function createPlanningWorkbook(options = {}) {
+  const { populate = false, exportModel, excelApi = globalThis.ExcelJS } = options;
+  if (populate && !exportModel) throw new Error("An export model is required to populate the workbook.");
+  const schema = buildPlanningWorkbookSchema();
+  const workbook = createWorkbookStructure(excelApi, schema);
+  if (populate) {
+    populateWorkbookInputs(workbook, exportModel, buildWorkbookFieldLocationIndex(schema));
+    populateWorkbookTimelineOverrides(workbook, exportModel, buildWorkbookTimelineOverrideMap(schema));
+  }
+  return workbook;
+}
+
+function buildExportWorkbook(exportModel, excelApi = globalThis.ExcelJS) {
+  return createPlanningWorkbook({ populate: true, exportModel, excelApi });
+}
+
+function buildBlankPlanningWorkbook(excelApi = globalThis.ExcelJS) {
+  return createPlanningWorkbook({ populate: false, excelApi });
 }
 
 // Compares the supported-input inventory with the Field IDs / timeline columns actually present in a
