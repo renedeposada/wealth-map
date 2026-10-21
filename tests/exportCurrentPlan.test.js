@@ -63,7 +63,7 @@ function setup() {
        setPlanExportLogger, cloneSampleProfile, buildExportWorkbook: () => buildExportWorkbook };`,
     sandbox,
   );
-  sandbox.__x.setPlanExportLogger(() => {});
+  sandbox.__x.setPlanExportLogger((entry) => { if (entry.event === "currentPlanExportFailed") logs.push(entry); });
   return { x: sandbox.__x, get, anchors, revoked, blobs, logs, timers, sandbox };
 }
 
@@ -154,9 +154,13 @@ test("failures show a safe message, trigger no download, restore the button, and
     await env.x.exportCurrentPlanFromMenu();
     const message = env.get("plan-actions-message");
     assert.equal(message.hidden, false, name);
-    const expected = ["build", "population"].includes(name)
-      ? "WealthMap could not prepare the Excel workbook. Please try again."
-      : "Current plan export failed. Please review your plan and try again.";
+    const expected = {
+      model: "Current plan export failed. Review your plan and try again.",
+      build: "WealthMap could not prepare the Excel workbook. Your plan was not changed.",
+      population: "WealthMap could not prepare the Excel workbook. Your plan was not changed.",
+      serialize: "WealthMap could not finish the file download. Try exporting the plan again.",
+      download: "WealthMap could not finish the file download. Try exporting the plan again.",
+    }[name];
     assert.equal(message.textContent, expected, name);
     assert.equal(env.get("plan-actions-menu").hidden, false, name);
     assert.equal(env.get("workbook-import-status").textContent, "", name);
@@ -176,7 +180,7 @@ test("missing workbook library gives the unavailable message", async () => {
   env.x.setValid(true);
   delete env.sandbox.ExcelJS;
   await env.x.exportCurrentPlanFromMenu();
-  assert.match(env.get("plan-actions-message").textContent, /^Excel export is unavailable right now/);
+  assert.match(env.get("plan-actions-message").textContent, /^Excel export is unavailable right now\. Refresh the page/);
   assert.equal(env.anchors.length, 0);
 });
 
@@ -208,5 +212,105 @@ test("Escape still closes the menu and the export item is bound as a click actio
   assert.equal(env.get("plan-actions-menu").hidden, true);
   assert.equal(env.get("plan-actions-button").focused, 1);
   assert.equal(env.get("export-current-plan").listeners.click.length, 1);
+  assert.equal(env.get("export-current-plan").disabled, false);
+});
+
+test("additional failure stages show fixed safe messages, restore the button, and allow retry", needsExcel, async () => {
+  const secret = "Secret Name 987654";
+  const cases = {
+    timelinePopulation: [(env) => env.x.spy("populateWorkbookTimelineOverrides", () => ({ populated: [], skipped: [], errors: [{ code: "INVALID_TIMELINE_VALUE" }] })), /could not prepare/, "TIMELINE_POPULATION_FAILED"],
+    verification: [(env) => env.x.spy("validateWorkbookPopulationResult", () => { throw Object.assign(new Error(secret), { code: "INVALID_WORKBOOK_BUILD_RESULT" }); }), /could not prepare/, "INVALID_WORKBOOK_BUILD_RESULT"],
+    unexpected: [(env) => env.x.spy("buildExportWorkbook", () => { throw new RangeError(secret); }), /could not prepare/, "WORKBOOK_BUILD_FAILED"],
+    unexpectedUncoded: [(env) => env.x.spy("downloadExcelWorkbook", () => { throw new RangeError(secret); }), /^Current plan export failed/, "UNKNOWN_EXPORT_FAILURE"],
+    clickFails: [(env) => env.sandbox.document.body.append = () => { throw new Error(secret); }, /could not finish the file download/, "DOWNLOAD_TRIGGER_FAILED"],
+  };
+  for (const [name, [arrange, pattern, code]] of Object.entries(cases)) {
+    const env = setup();
+    const entries = [];
+    env.x.setPlanExportLogger((entry) => entries.push(JSON.parse(JSON.stringify(entry))));
+    const profile = env.x.cloneSampleProfile();
+    profile.name = secret;
+    profile.timelineOverrides = { 60: { expenses: 123456 } };
+    env.x.setProfile(profile);
+    env.x.setValid(true);
+    arrange(env);
+    await env.x.exportCurrentPlanFromMenu();
+    assert.match(env.get("plan-actions-message").textContent, pattern, name);
+    assert.equal(env.get("workbook-import-status").textContent, "", name);
+    const failure = entries.filter((entry) => entry.event === "currentPlanExportFailed");
+    assert.equal(failure.length, 1, name);
+    assert.equal(failure[0].code, code, name);
+    assert.deepEqual(Object.keys(failure[0]).sort(), ["code", "errorType", "event", "stage"], name);
+    assert.ok(!JSON.stringify(entries).includes("987654") && !JSON.stringify(entries).includes("123456"), name);
+    const button = env.get("export-current-plan");
+    assert.equal(button.disabled, false, name);
+    assert.equal(button.attrs["aria-busy"], "false", name);
+    assert.equal(button.attrs["aria-disabled"], "false", name);
+    assert.equal(button.focused, 1, name);
+    assert.ok(env.anchors.every((a) => a.removed === a.clicked || a.removed >= 1 || a.clicked === 0), name);
+  }
+});
+
+test("a missing profile is reported safely", async () => {
+  const env = setup();
+  env.x.setProfile(null);
+  await env.x.exportCurrentPlanFromMenu();
+  assert.match(env.get("plan-actions-message").textContent, /could not read the current plan/);
+  assert.equal(env.get("export-current-plan").disabled, false);
+  assert.equal(env.anchors.length, 0);
+});
+
+test("a logger failure cannot break export failure handling", needsExcel, async () => {
+  const env = setup();
+  env.x.setPlanExportLogger(() => { throw new Error("logger down"); });
+  env.x.setProfile(env.x.cloneSampleProfile());
+  env.x.setValid(true);
+  env.x.spy("buildExportWorkbook", () => { throw new Error("boom"); });
+  await env.x.exportCurrentPlanFromMenu();
+  assert.match(env.get("plan-actions-message").textContent, /could not prepare/);
+  assert.equal(env.get("export-current-plan").disabled, false);
+});
+
+test("accepting warnings revalidates the latest plan and never exports a captured model", needsExcel, async () => {
+  const env = setup();
+  const warning = { severity: "warning", fieldId: "currentAge", code: "x", page: "profile" };
+  let warn = true;
+  env.x.spy("validateCurrentPlanForExport", (orig, model) => {
+    const real = orig(model);
+    return warn ? { ...real, warnings: [warning] } : real;
+  });
+  const first = env.x.cloneSampleProfile();
+  env.x.setProfile(first);
+  const seenAges = [];
+  env.x.spy("buildPlanExportModel", (orig, p) => { seenAges.push(p.currentAge); return orig(p); });
+  env.x.spy("showExportValidationSummary", () => {});
+  await env.x.exportCurrentPlanFromMenu();
+  assert.equal(env.anchors.length, 0);
+
+  const changed = env.x.cloneSampleProfile();
+  changed.currentAge = 50;
+  env.x.setProfile(changed);
+  await env.x.exportCurrentPlanFromMenu({ allowWarnings: true });
+  assert.deepEqual(seenAges, [45, 50]);
+  assert.equal(env.anchors.length, 1);
+
+  // The latest plan now has errors: warnings acceptance must not bypass them.
+  const broken = env.x.cloneSampleProfile();
+  broken.currentAge = null;
+  env.x.setProfile(broken);
+  warn = false;
+  await env.x.exportCurrentPlanFromMenu({ allowWarnings: true });
+  assert.equal(env.anchors.length, 1);
+});
+
+test("export does not touch pending import state and a failed export keeps import usable", needsExcel, async () => {
+  const env = setup();
+  env.x.setProfile(env.x.cloneSampleProfile());
+  env.x.setValid(true);
+  const before = JSON.stringify(env.x.getProfile());
+  env.x.spy("buildExportWorkbook", () => { throw new Error("boom"); });
+  await env.x.exportCurrentPlanFromMenu();
+  assert.equal(JSON.stringify(env.x.getProfile()), before);
+  assert.equal(env.get("workbook-import-status").textContent, "");
   assert.equal(env.get("export-current-plan").disabled, false);
 });

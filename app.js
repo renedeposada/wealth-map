@@ -3560,14 +3560,7 @@ function showWorkbookExportStatus(text) {
 }
 
 function currentPlanExportFailureMessage(error) {
-  const code = error && error.code;
-  if (code === "WORKBOOK_LIBRARY_UNAVAILABLE") {
-    return "Excel export is unavailable right now. Please refresh the page and try again.";
-  }
-  if (typeof code === "string" && /POPULATION|BUILD_RESULT|WORKBOOK_BUILD/.test(code)) {
-    return "WealthMap could not prepare the Excel workbook. Please try again.";
-  }
-  return "Current plan export failed. Please review your plan and try again.";
+  return exportUserMessage(error && error.code);
 }
 
 const EXPORT_SUMMARY_MAX_ISSUES = 10;
@@ -3671,11 +3664,8 @@ async function exportCurrentPlanFromMenu(options = {}) {
     }
   } catch (error) {
     failed = true;
-    // Only a safe code is logged; never the plan, export model, or workbook.
-    console.error("[WealthMap export]", {
-      event: "currentPlanExportFailed",
-      code: (error && error.code) || "EXPORT_FAILED",
-    });
+    // Only safe metadata (stage, code, error type) is logged; never the plan, model, or workbook.
+    logExportFailure(error);
     showPlanActionsMessage(currentPlanExportFailureMessage(error));
   } finally {
     currentPlanExportInProgress = false;

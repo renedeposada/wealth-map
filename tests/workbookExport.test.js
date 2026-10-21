@@ -124,7 +124,9 @@ test("prohibited, unknown, timeline, duplicate and invalid fields are rejected w
   assert.equal(codes.inflationRate, "INVALID_EXPORT_VALUE");
   assert.equal(codes.annualSalary, "DUPLICATE_EXPORT_FIELD");
   assert.equal(cellOf(wb, "annualSalary").value, null);
-  assert.equal(cellOf(wb, "assets.cash").value, secret);
+  // Transactional population: one error means no cell is written.
+  assert.equal(cellOf(wb, "assets.cash").value, null);
+  assert.equal(result.populatedFieldIds.length, 0);
   assert.ok(!JSON.stringify(result.errors).includes(String(secret)));
   assert.throws(() => we.buildExportWorkbook({ ...model(), profile: { bogus: secret } }), (e) => !e.message.includes(String(secret)));
 });

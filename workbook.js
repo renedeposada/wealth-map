@@ -725,7 +725,7 @@ function toWorkbookExportValue(value, schemaEntry) {
   }
 }
 
-// Writes standard (non-Timeline) export values into their Value cells. Only cell values are
+// Writes standard (non-Timeline) export values into their Value cells (prepare, then commit). Only cell values are
 // assigned, so number formats, validations and styles are untouched. Returns
 // { populatedFieldIds, blankFieldIds, errors } where errors hold { code, fieldId, worksheet? } only.
 function populateWorkbookInputs(
@@ -741,6 +741,8 @@ function populateWorkbookInputs(
   const fields = collectStandardExportFields(exportModel, duplicates);
   duplicates.forEach((fieldId) => fail("DUPLICATE_EXPORT_FIELD", fieldId));
   const schemaById = new Map(schema.map((entry) => [entry.fieldId, entry]));
+  const prepared = [];
+  const seenDestinations = new Set();
 
   Object.keys(fields).forEach((fieldId) => {
     if (workbookFieldIdIsProhibited(fieldId)) return fail("PROHIBITED_EXPORT_FIELD", fieldId);
@@ -756,8 +758,17 @@ function populateWorkbookInputs(
     if (!sheet) return fail("MISSING_WORKBOOK_LOCATION", fieldId, entry.worksheet);
     const converted = toWorkbookExportValue(fields[fieldId], entry);
     if (converted.error) return fail(converted.error, fieldId, entry.worksheet);
-    sheet.getCell(location.row, location.column).value = converted.value;
-    (converted.value === null ? result.blankFieldIds : result.populatedFieldIds).push(fieldId);
+    const destination = `${location.worksheet}:${location.row}:${location.column}`;
+    if (seenDestinations.has(destination)) return fail("DUPLICATE_EXPORT_DESTINATION", fieldId, entry.worksheet);
+    seenDestinations.add(destination);
+    prepared.push({ fieldId, sheet, location, workbookValue: converted.value });
+  });
+
+  // Transactional: nothing is written unless every field was prepared without error.
+  if (result.errors.length) return result;
+  prepared.forEach((write) => {
+    write.sheet.getCell(write.location.row, write.location.column).value = write.workbookValue;
+    (write.workbookValue === null ? result.blankFieldIds : result.populatedFieldIds).push(write.fieldId);
   });
   return result;
 }
@@ -875,11 +886,86 @@ function populateWorkbookTimelineOverrides(
   return result;
 }
 
-// Errors carry a machine-readable code and a message that never includes plan values.
-function createSafeExportError(code, message = "WealthMap workbook export failed.") {
-  const error = new Error(message);
-  error.code = code;
+// Operational export failures. Each has a fixed user-safe message below; raw exception text,
+// plan values, and workbook content are never surfaced or logged.
+const EXPORT_FAILURE_CODES = Object.freeze({
+  EXPORT_IN_PROGRESS: "EXPORT_IN_PROGRESS",
+  MISSING_CURRENT_PROFILE: "MISSING_CURRENT_PROFILE",
+  EXPORT_MODEL_BUILD_FAILED: "EXPORT_MODEL_BUILD_FAILED",
+  EXPORT_VALIDATION_FAILED: "EXPORT_VALIDATION_FAILED",
+  WORKBOOK_LIBRARY_UNAVAILABLE: "WORKBOOK_LIBRARY_UNAVAILABLE",
+  WORKBOOK_BUILD_FAILED: "WORKBOOK_BUILD_FAILED",
+  STANDARD_POPULATION_FAILED: "STANDARD_POPULATION_FAILED",
+  TIMELINE_POPULATION_FAILED: "TIMELINE_POPULATION_FAILED",
+  INVALID_WORKBOOK_BUILD_RESULT: "INVALID_WORKBOOK_BUILD_RESULT",
+  WORKBOOK_SERIALIZATION_FAILED: "WORKBOOK_SERIALIZATION_FAILED",
+  DOWNLOAD_TRIGGER_FAILED: "DOWNLOAD_TRIGGER_FAILED",
+  UNKNOWN_EXPORT_FAILURE: "UNKNOWN_EXPORT_FAILURE",
+});
+
+const EXPORT_PREPARE_MESSAGE = "WealthMap could not prepare the Excel workbook. Your plan was not changed.";
+const EXPORT_DOWNLOAD_MESSAGE = "WealthMap could not finish the file download. Try exporting the plan again.";
+const EXPORT_GENERIC_MESSAGE = "Current plan export failed. Review your plan and try again.";
+const EXPORT_USER_MESSAGES = Object.freeze({
+  EXPORT_IN_PROGRESS: "An export is already in progress.",
+  MISSING_CURRENT_PROFILE: "WealthMap could not read the current plan. Refresh the page and try again.",
+  EXPORT_MODEL_BUILD_FAILED: EXPORT_GENERIC_MESSAGE,
+  EXPORT_VALIDATION_FAILED: "Your current plan contains information that must be reviewed before it can be exported.",
+  WORKBOOK_LIBRARY_UNAVAILABLE: "Excel export is unavailable right now. Refresh the page and try again.",
+  WORKBOOK_BUILD_FAILED: EXPORT_PREPARE_MESSAGE,
+  STANDARD_POPULATION_FAILED: EXPORT_PREPARE_MESSAGE,
+  TIMELINE_POPULATION_FAILED: EXPORT_PREPARE_MESSAGE,
+  INVALID_WORKBOOK_BUILD_RESULT: EXPORT_PREPARE_MESSAGE,
+  WORKBOOK_SERIALIZATION_FAILED: EXPORT_DOWNLOAD_MESSAGE,
+  DOWNLOAD_TRIGGER_FAILED: EXPORT_DOWNLOAD_MESSAGE,
+  UNKNOWN_EXPORT_FAILURE: EXPORT_GENERIC_MESSAGE,
+});
+
+function exportFailureCodeOrUnknown(code) {
+  return typeof code === "string" && Object.prototype.hasOwnProperty.call(EXPORT_FAILURE_CODES, code)
+    ? code
+    : EXPORT_FAILURE_CODES.UNKNOWN_EXPORT_FAILURE;
+}
+
+// Unknown or missing codes resolve to the generic message.
+function exportUserMessage(code) {
+  return EXPORT_USER_MESSAGES[exportFailureCodeOrUnknown(code)];
+}
+
+// Pipeline stage per failure code, used only for value-free diagnostics.
+const EXPORT_FAILURE_STAGES = Object.freeze({
+  EXPORT_IN_PROGRESS: "guard",
+  MISSING_CURRENT_PROFILE: "profile",
+  EXPORT_MODEL_BUILD_FAILED: "model",
+  EXPORT_VALIDATION_FAILED: "validation",
+  WORKBOOK_LIBRARY_UNAVAILABLE: "library",
+  WORKBOOK_BUILD_FAILED: "workbookBuild",
+  STANDARD_POPULATION_FAILED: "standardPopulation",
+  TIMELINE_POPULATION_FAILED: "timelinePopulation",
+  INVALID_WORKBOOK_BUILD_RESULT: "populationVerification",
+  WORKBOOK_SERIALIZATION_FAILED: "serialization",
+  DOWNLOAD_TRIGGER_FAILED: "download",
+  UNKNOWN_EXPORT_FAILURE: "unknown",
+});
+
+// Errors carry a registry code and its fixed safe message, never plan values.
+function createSafeExportError(code) {
+  const safeCode = exportFailureCodeOrUnknown(code);
+  const error = new Error(EXPORT_USER_MESSAGES[safeCode]);
+  error.code = safeCode;
   return error;
+}
+
+// Single diagnostics boundary for export failures: event, stage, code and error type only.
+function logExportFailure(error) {
+  const code = exportFailureCodeOrUnknown(error && error.code);
+  const type = error && error.constructor && error.constructor.name;
+  logPlanExportEvent({
+    event: "currentPlanExportFailed",
+    stage: EXPORT_FAILURE_STAGES[code],
+    code,
+    errorType: typeof type === "string" ? type : "Unknown",
+  });
 }
 
 // Build metadata kept off the workbook itself (and out of the exported file).
@@ -895,7 +981,7 @@ function getWorkbookTimelinePopulationResult(workbook) {
 function createPlanningWorkbook(options = {}) {
   const { populate = false, exportModel, excelApi = globalThis.ExcelJS } = options;
   if (populate && !exportModel) {
-    throw createSafeExportError("INVALID_EXPORT_MODEL", "An export model is required to populate the workbook.");
+    throw createSafeExportError("EXPORT_MODEL_BUILD_FAILED");
   }
   const schema = buildPlanningWorkbookSchema();
   const workbook = createWorkbookStructure(excelApi, schema);
@@ -908,8 +994,7 @@ function createPlanningWorkbook(options = {}) {
     );
     workbookPopulationResults.set(workbook, result);
     if (result.errors.length) {
-      const codes = [...new Set(result.errors.map((error) => error.code))].join(", ");
-      throw createSafeExportError("STANDARD_POPULATION_FAILED", `Workbook population failed (${result.errors.length} issue(s): ${codes}).`);
+      throw createSafeExportError("STANDARD_POPULATION_FAILED");
     }
     const timelineResult = populateWorkbookTimelineOverrides(
       workbook,
@@ -919,8 +1004,7 @@ function createPlanningWorkbook(options = {}) {
     );
     workbookTimelinePopulationResults.set(workbook, timelineResult);
     if (timelineResult.errors.length) {
-      const codes = [...new Set(timelineResult.errors.map((error) => error.code))].join(", ");
-      throw createSafeExportError("TIMELINE_POPULATION_FAILED", `Workbook timeline population failed (${timelineResult.errors.length} issue(s): ${codes}).`);
+      throw createSafeExportError("TIMELINE_POPULATION_FAILED");
     }
   }
   return workbook;
@@ -989,6 +1073,8 @@ function workbookCellHasFormula(cell) {
 
 // Audits a generated workbook against the static input allowlist. It never reads workingProfile or
 // calculation results; SAMPLE_PROFILE is read only to prove its free-text values are not embedded.
+// `populatedExport: true` permits values in recognized input destinations only; formula, hidden,
+// prohibited-field and output checks are unchanged.
 function auditWorkbookForCalculatedOutputs(workbook, options = {}) {
   const inventory = options.inventory || buildSupportedInputInventory();
   const schema = options.schema || buildPlanningWorkbookSchema();
@@ -1046,11 +1132,19 @@ function auditWorkbookForCalculatedOutputs(workbook, options = {}) {
         if (workbookCellHasFormula(cell)) findings.formulaCells.push(where);
         if (cell.note) findings.hiddenOutput.push(`cell note: ${where}`);
         const text = workbookCellText(cell).trim().toLowerCase();
-        if (text && sampleText.includes(text)) findings.sampleProfileValues.push(where);
-        if (isInput && rowNumber > WORKBOOK_LAYOUT.inputHeaderRow && columnNumber === 3) {
+        // In populated-export mode, values are permitted only in recognized input destinations.
+        const recognizedInput = Boolean(
+          options.populatedExport &&
+            ((isInput && rowNumber > WORKBOOK_LAYOUT.inputHeaderRow && columnNumber === 3 &&
+              inventoryIds.has(workbookCellText(sheet.getCell(rowNumber, 6)))) ||
+              (isTimeline && rowNumber > WORKBOOK_LAYOUT.timelineHeaderRow && columnNumber > 1 &&
+                timelineIds.has(workbookCellText(sheet.getCell(WORKBOOK_LAYOUT.timelineFieldIdRow, columnNumber))))),
+        );
+        if (!recognizedInput && text && sampleText.includes(text)) findings.sampleProfileValues.push(where);
+        if (!recognizedInput && isInput && rowNumber > WORKBOOK_LAYOUT.inputHeaderRow && columnNumber === 3) {
           findings.activePlanValues.push(where);
         }
-        if (isTimeline && rowNumber > WORKBOOK_LAYOUT.timelineHeaderRow) {
+        if (!recognizedInput && isTimeline && rowNumber > WORKBOOK_LAYOUT.timelineHeaderRow) {
           const age = rowNumber - WORKBOOK_LAYOUT.timelineHeaderRow - 1 + WORKBOOK_LAYOUT.timelineMinAge;
           if (columnNumber === 1 ? cell.value !== age : true) findings.activePlanValues.push(where);
         }
@@ -1167,8 +1261,6 @@ function currentPlanWorkbookFilename(profile, date = new Date()) {
   return `WealthMap_Current_Plan_${workbookDateStamp(date)}.xlsx`;
 }
 
-// Exports the supplied (current) plan as a populated workbook download. Throws errors that carry a
-// safe `code`; messages and codes never include plan values.
 // Confirms population produced no errors. Throws a safe error without plan values.
 function validateWorkbookPopulationResult(workbook) {
   if (!workbook || !workbook.xlsx || typeof workbook.xlsx.writeBuffer !== "function") {
@@ -1200,7 +1292,9 @@ async function downloadCurrentPlanWorkbook(profile = currentWorkingProfile(), op
   try {
     workbook = buildExportWorkbook(exportModel);
   } catch (error) {
-    throw error && error.code ? error : createSafeExportError("WORKBOOK_BUILD_FAILED");
+    const code = error && error.code;
+    const known = code && code !== EXPORT_FAILURE_CODES.UNKNOWN_EXPORT_FAILURE && exportFailureCodeOrUnknown(code) === code;
+    throw known ? error : createSafeExportError("WORKBOOK_BUILD_FAILED");
   }
   validateWorkbookPopulationResult(workbook);
   await downloadExcelWorkbook(workbook, currentPlanWorkbookFilename(profile));
