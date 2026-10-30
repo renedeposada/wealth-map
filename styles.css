@@ -531,3 +531,10 @@ td.model-generated { color: var(--teal); font-weight: 700; }
 .import-preview-change-values { font-size: 13px; }
 .import-preview-actions { position: sticky; bottom: -20px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; padding: 12px 0; background: var(--paper); border-top: 1px solid var(--line); }
 .import-preview-actions [hidden] { display: none; }
+
+.support-panel { max-width: 720px; padding: 24px; font: 14px/1.7 Arial, sans-serif; }
+.support-panel p { margin: 0 0 14px; }
+.support-button { display: inline-block; text-decoration: none; background: var(--blue); color: #fff; }
+.support-button:hover { background: var(--blue); filter: brightness(1.1); }
+.support-button[aria-disabled="true"] { opacity: .6; cursor: not-allowed; filter: none; }
+.support-note { margin: 14px 0 0; color: var(--ink-soft); font-size: 12px; }

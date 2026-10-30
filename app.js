@@ -28,7 +28,11 @@ const pageTitles = {
   cashflow: ["CASH FLOW", "Income & Expenses"],
   timeline: ["TIMELINE", "Wealth Timeline"],
   recommendations: ["RECOMMENDATIONS", "Recommendations"],
+  support: ["SUPPORT", "Support This Project"],
 };
+
+// External GitHub Sponsors one-time sponsorship page (opens in a new tab).
+const SUPPORT_URL = "https://github.com/sponsors/renedeposada?frequency=one-time&sponsor=renedeposada";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -3435,7 +3439,7 @@ function handleInput(event) {
 function getPageFromHash() {
   const hash = window.location.hash.replace(/^#\/?/, "").trim();
   if (pageTitles[hash]) return hash;
-  if (hash === "readiness" || hash === "profile" || hash === "assets" || hash === "cashflow" || hash === "timeline" || hash === "recommendations") {
+  if (hash === "readiness" || hash === "profile" || hash === "assets" || hash === "cashflow" || hash === "timeline" || hash === "recommendations" || hash === "support") {
     return hash;
   }
   return "readiness";
@@ -3776,7 +3780,15 @@ function bindFieldListeners() {
   });
 }
 
+function initSupportLink() {
+  const link = $("#support-link");
+  if (!/^https:\/\//i.test(SUPPORT_URL)) return;
+  link.href = SUPPORT_URL;
+  link.removeAttribute("aria-disabled");
+}
+
 function init() {
+  initSupportLink();
   renderFormFields();
   renderAssetFields();
   restoreAdvancedTaxSettingsState();
