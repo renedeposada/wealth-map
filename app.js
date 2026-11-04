@@ -28,11 +28,11 @@ const pageTitles = {
   cashflow: ["CASH FLOW", "Income & Expenses"],
   timeline: ["TIMELINE", "Wealth Timeline"],
   recommendations: ["RECOMMENDATIONS", "Recommendations"],
-  support: ["SUPPORT", "Support This Project"],
+  support: ["SUPPORT", "Support WealthMap"],
 };
 
-// External GitHub Sponsors one-time sponsorship page (opens in a new tab).
-const SUPPORT_URL = "https://github.com/sponsors/renedeposada?frequency=one-time&sponsor=renedeposada";
+// Stripe-hosted WealthMap support/payment page (opens in a new tab).
+const SUPPORT_URL = "https://buy.stripe.com/3cI00i4dz2sQ5HQ3LT7bW00";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
