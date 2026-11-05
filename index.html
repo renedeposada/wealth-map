@@ -13,20 +13,44 @@
       <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
         <div class="brand-block">
           <div class="brand-mark" aria-hidden="true">WM</div>
-          <div>
+          <div class="brand-copy">
             <strong>Wealth Map</strong>
             <span>Retirement planning</span>
           </div>
+          <button class="icon-button sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar">
+            <svg class="sidebar-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"></path><path d="M19 4v16"></path></svg>
+          </button>
           <button class="icon-button sidebar-close" id="close-menu" type="button" aria-label="Close navigation">×</button>
         </div>
         <nav class="primary-nav" aria-label="Main pages">
-          <button class="nav-item active" type="button" data-page="readiness"><span>01</span>Readiness</button>
-          <button class="nav-item" type="button" data-page="profile"><span>02</span>Plan Setup</button>
-          <button class="nav-item" type="button" data-page="assets"><span>03</span>Assets</button>
-          <button class="nav-item" type="button" data-page="cashflow"><span>04</span>Income &amp; Expenses</button>
-          <button class="nav-item" type="button" data-page="timeline"><span>05</span>Timeline</button>
-          <button class="nav-item" type="button" data-page="recommendations"><span>06</span>Recommendations</button>
-          <button class="nav-item" type="button" data-page="support"><span>07</span>Support</button>
+          <button class="nav-item active" type="button" data-page="readiness" aria-label="Readiness" aria-current="page">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19a9 9 0 1 1 15 0"></path><path d="m12 13 4-4"></path><path d="M8 19h8"></path></svg>
+            <span class="nav-label">Readiness</span>
+          </button>
+          <button class="nav-item" type="button" data-page="profile" aria-label="Plan Setup">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path><path d="M8 4v4m8 2v4m-5 2v4"></path></svg>
+            <span class="nav-label">Plan Setup</span>
+          </button>
+          <button class="nav-item" type="button" data-page="assets" aria-label="Assets">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"></rect><path d="M3 10h18m-5 5h2"></path><path d="M6 6V4h12v2"></path></svg>
+            <span class="nav-label">Assets</span>
+          </button>
+          <button class="nav-item" type="button" data-page="cashflow" aria-label="Income &amp; Expenses">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16m-3-3 3 3 3-3M17 20V4m-3 3 3-3 3 3"></path></svg>
+            <span class="nav-label">Income &amp; Expenses</span>
+          </button>
+          <button class="nav-item" type="button" data-page="timeline" aria-label="Timeline">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5m0 14h16"></path><path d="m6 15 4-4 3 2 6-7"></path><path d="M16 6h3v3"></path></svg>
+            <span class="nav-label">Timeline</span>
+          </button>
+          <button class="nav-item" type="button" data-page="recommendations" aria-label="Recommendations">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6m-5 3h4"></path><path d="M8.2 14.5A7 7 0 1 1 15.8 14.5c-.9.7-1.3 1.5-1.3 2.5h-5c0-1-.4-1.8-1.3-2.5Z"></path></svg>
+            <span class="nav-label">Recommendations</span>
+          </button>
+          <button class="nav-item" type="button" data-page="support" aria-label="Support">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 8.8c0 4.2-8.8 10-8.8 10s-8.8-5.8-8.8-10A4.8 4.8 0 0 1 12 6.4a4.8 4.8 0 0 1 8.8 2.4Z"></path></svg>
+            <span class="nav-label">Support</span>
+          </button>
         </nav>
         <div class="sidebar-footer">
           <div class="mini-profile">
@@ -34,7 +58,7 @@
             <strong id="sidebar-name">Alex Morgan</strong>
             <span id="sidebar-timeline">Age 45 → Retire 65</span>
           </div>
-          <p class="sidebar-note"><span aria-hidden="true">i</span> Sample plan</p>
+          <p class="sidebar-note"><span class="sidebar-note-icon" aria-hidden="true">i</span><span class="sidebar-note-label">Sample plan</span></p>
         </div>
       </aside>
 
@@ -61,6 +85,9 @@
               </div>
               <input id="import-workbook-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Choose a WealthMap Planning Workbook (.xlsx) to check" hidden>
             </div>
+            <button class="icon-button help-button" id="help-button" type="button" aria-label="How to use WealthMap" aria-haspopup="dialog" data-tooltip="How to use WealthMap">
+              <svg class="help-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+            </button>
           </div>
         </header>
         <section class="export-validation-summary" id="export-validation-summary" aria-labelledby="export-validation-title" tabindex="-1" hidden></section>
@@ -542,6 +569,25 @@
         <button class="button button-quiet" id="download-import-validation-report" type="button" hidden>Download Validation Report</button>
         <button class="button" id="confirm-workbook-import" type="button" hidden>Import Plan</button>
       </div>
+    </dialog>
+    <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-dialog-title">
+      <div class="help-dialog-header">
+        <h2 id="help-dialog-title">How to use WealthMap</h2>
+        <button class="icon-button help-dialog-close" id="close-help" type="button" aria-label="Close How to use WealthMap">
+          <svg class="help-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+        </button>
+      </div>
+      <p class="help-intro">Follow these steps to build and review your retirement plan:</p>
+      <ol class="help-steps">
+        <li><strong>Plan Setup</strong><span>Enter your basic retirement assumptions, including your age, retirement age, spending goals, and planning assumptions.</span></li>
+        <li><strong>Assets</strong><span>Add your current retirement accounts, investments, cash, and other assets.</span></li>
+        <li><strong>Income &amp; Expenses</strong><span>Enter your income, contributions, and current expenses.</span></li>
+        <li><strong>Readiness</strong><span>Review your retirement readiness based on the information you've entered.</span></li>
+        <li><strong>Timeline</strong><span>See how your income, spending, withdrawals, taxes, and portfolio are projected to change throughout retirement.</span></li>
+        <li><strong>Recommendations</strong><span>Review opportunities WealthMap identifies that may improve your retirement plan.</span></li>
+        <li><strong>Save Your Plan for Later</strong><span>Use <strong class="help-inline">Export Current Plan</strong> from the Plan Actions menu to download your plan as an Excel file. Keep this file somewhere safe. When you return to WealthMap later, use <strong class="help-inline">Import Planning Workbook</strong> to load your saved plan and continue where you left off.</span></li>
+      </ol>
+      <p class="help-tip"><strong>Tip:</strong> WealthMap does not require an account. Export your current plan before leaving if you want to continue working with it later.</p>
     </dialog>
     <dialog class="plan-report-dialog" id="plan-report-dialog" aria-labelledby="plan-report-dialog-title">
       <div class="report-dialog-toolbar">

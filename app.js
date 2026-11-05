@@ -33,6 +33,7 @@ const pageTitles = {
 
 // Stripe-hosted WealthMap support/payment page (opens in a new tab).
 const SUPPORT_URL = "https://buy.stripe.com/3cI00i4dz2sQ5HQ3LT7bW00";
+const SIDEBAR_PREFERENCE_KEY = "wealthmap.sidebarCollapsed";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -3454,9 +3455,12 @@ function showPage(page) {
   $$(".page-view").forEach((view) => {
     view.hidden = view.dataset.view !== currentPage;
   });
-  $$(".nav-item").forEach((item) =>
-    item.classList.toggle("active", item.dataset.page === currentPage),
-  );
+  $$(".nav-item").forEach((item) => {
+    const isActive = item.dataset.page === currentPage;
+    item.classList.toggle("active", isActive);
+    if (isActive) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
   const [breadcrumb, title] = pageTitles[currentPage];
   $("#breadcrumb").textContent = breadcrumb;
   $("#page-title").textContent = title;
@@ -3470,6 +3474,49 @@ function syncPageFromHash() {
 function closeMenu() {
   $("#sidebar").classList.remove("open");
   $("#scrim").hidden = true;
+}
+
+function readSidebarCollapsedPreference() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function applySidebarCollapsedState(isCollapsed) {
+  $(".app-shell").classList.toggle("sidebar-collapsed", isCollapsed);
+  const toggle = $("#sidebar-collapse");
+  toggle.setAttribute("aria-expanded", String(!isCollapsed));
+  toggle.setAttribute(
+    "aria-label",
+    isCollapsed ? "Expand sidebar" : "Collapse sidebar",
+  );
+}
+
+function initSidebarCollapse() {
+  const toggle = $("#sidebar-collapse");
+  applySidebarCollapsedState(readSidebarCollapsedPreference());
+  toggle.addEventListener("click", () => {
+    const isCollapsed = !$(".app-shell").classList.contains("sidebar-collapsed");
+    applySidebarCollapsedState(isCollapsed);
+    try {
+      window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, String(isCollapsed));
+    } catch {
+      // The sidebar still works for this session when browser storage is unavailable.
+    }
+  });
+}
+
+function initHelpDialog() {
+  const dialog = $("#help-dialog");
+  const button = $("#help-button");
+  button.addEventListener("click", () => dialog.showModal());
+  $("#close-help").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener("close", () => button.focus());
 }
 
 function toggleAdvancedTaxSettings() {
@@ -3788,6 +3835,8 @@ function initSupportLink() {
 }
 
 function init() {
+  initSidebarCollapse();
+  initHelpDialog();
   initSupportLink();
   renderFormFields();
   renderAssetFields();
